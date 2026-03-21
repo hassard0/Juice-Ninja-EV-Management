@@ -106,7 +106,13 @@ export default function Dashboard() {
       for (const [key, values] of Object.entries(dayReadings)) {
         const [y, m, dd] = key.split("-").map(Number);
         const dayName = dayNames[new Date(y, m, dd).getDay()];
-        const delta = Math.max(0, Math.max(...values) - Math.min(...values)) / 1000;
+        // Sort and detect jumps to avoid counting meter baseline changes
+        const sorted = [...values].sort((a, b) => a - b);
+        let baseline = sorted[0];
+        for (let i = 1; i < sorted.length; i++) {
+          if (sorted[i] - sorted[i - 1] > 100000) baseline = sorted[i];
+        }
+        const delta = Math.max(0, sorted[sorted.length - 1] - baseline) / 1000;
         dayMap[dayName] = (dayMap[dayName] || 0) + delta;
       }
       return Object.entries(dayMap).map(([day, kwh]) => ({ day, kwh: parseFloat(kwh.toFixed(1)) }));
@@ -159,7 +165,14 @@ export default function Dashboard() {
         .filter((t) => t.device_id === device.id && t.wh != null)
         .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
       if (readings.length >= 2) {
-        map[device.id] = Math.max(0, (readings[readings.length - 1].wh! - readings[0].wh!)) / 1000;
+        // Use contiguous readings — detect large jumps (meter baseline changes)
+        let baseline = readings[0].wh!;
+        for (let i = 1; i < readings.length; i++) {
+          if (Math.abs(readings[i].wh! - readings[i - 1].wh!) > 100000) {
+            baseline = readings[i].wh!;
+          }
+        }
+        map[device.id] = Math.max(0, (readings[readings.length - 1].wh! - baseline)) / 1000;
       } else {
         map[device.id] = 0;
       }

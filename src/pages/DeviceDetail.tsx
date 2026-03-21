@@ -158,7 +158,18 @@ export default function DeviceDetail() {
   const sessionEnergyWh = useMemo(() => {
     const whValues = rawTelemetry.filter((t) => t.wh != null).map((t) => t.wh!);
     if (whValues.length < 2) return 0;
-    return Math.max(0, whValues[whValues.length - 1] - whValues[0]);
+    // Find the start of the current contiguous session — a large jump in the
+    // cumulative meter means the charger reconnected or meter was reset.
+    let baseline = whValues[0];
+    for (let i = 1; i < whValues.length; i++) {
+      const jump = Math.abs(whValues[i] - whValues[i - 1]);
+      // If the reading jumps by more than 100 kWh (100000 Wh) treat it as a
+      // meter baseline change (different session / reconnect with lifetime meter)
+      if (jump > 100000) {
+        baseline = whValues[i];
+      }
+    }
+    return Math.max(0, whValues[whValues.length - 1] - baseline);
   }, [rawTelemetry]);
 
   const vehicleConnected = (device as any)?.vehicle_connected ?? false;
