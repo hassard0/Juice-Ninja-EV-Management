@@ -142,6 +142,8 @@ async function handleWebSocket(request) {
   const [client, server] = Object.values(new WebSocketPair());
   server.accept();
 
+  const outboundCommands = {};
+
   server.addEventListener('message', async (event) => {
     try {
       const raw = event.data;
@@ -173,20 +175,66 @@ async function handleWebSocket(request) {
         await handleOcppCall(server, resolvedDeviceId, device.api_key, uniqueId, action, payload);
       } else if (messageType === 3) {
         // CALLRESULT - charger responding to our command
+        const responsePayload = msg[2] || {};
         console.log('CALLRESULT from ' + resolvedDeviceId + ':', JSON.stringify(msg));
+
+        const pending = outboundCommands[uniqueId];
+        if (pending) {
+          const statusValue = typeof responsePayload?.status === 'string' ? responsePayload.status.toLowerCase() : null;
+          const accepted = !statusValue || statusValue === 'accepted';
+          await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + pending.commandId, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SERVICE_KEY,
+              'Authorization': 'Bearer ' + SERVICE_KEY,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: JSON.stringify({
+              status: accepted ? 'completed' : 'failed',
+              completed_at: new Date().toISOString(),
+              result: { type: 'CALLRESULT', payload: responsePayload },
+            }),
+          });
+          delete outboundCommands[uniqueId];
+        }
       } else if (messageType === 4) {
         // CALLERROR
+        const errorCode = msg[2] || 'UnknownError';
+        const errorDescription = msg[3] || 'Unknown OCPP error';
+        const errorDetails = msg[4] || {};
         console.log('CALLERROR from ' + resolvedDeviceId + ':', JSON.stringify(msg));
+
+        const pending = outboundCommands[uniqueId];
+        if (pending) {
+          await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + pending.commandId, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SERVICE_KEY,
+              'Authorization': 'Bearer ' + SERVICE_KEY,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: JSON.stringify({
+              status: 'failed',
+              completed_at: new Date().toISOString(),
+              result: {
+                type: 'CALLERROR',
+                errorCode,
+                errorDescription,
+                errorDetails,
+              },
+            }),
+          });
+          delete outboundCommands[uniqueId];
+        }
       }
     } catch (e) {
       console.error('Error processing message:', e);
     }
   });
 
-  // Poll for pending commands every 10 seconds, keep device alive,
-  // and request fresh telemetry when a vehicle is connected.
-  // We intentionally avoid synthetic TriggerMessage(Heartbeat) pings because
-  // some firmware rejects unsolicited OCPP calls and drops the socket.
+  // Poll for pending commands every 10 seconds and keep device alive.
   const commandPollInterval = setInterval(async () => {
     try {
       // Update device timestamp to keep it "online" even between charger heartbeats
@@ -210,7 +258,8 @@ async function handleWebSocket(request) {
       const devData = await devRes.json();
       const dev = devData && devData[0];
 
-      const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at', {
+      // Send one command at a time to avoid command storms on charger firmware
+      const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at&limit=1', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
@@ -237,18 +286,38 @@ async function handleWebSocket(request) {
           continue;
         }
 
-        server.send(JSON.stringify(ocppMsg));
-        // Mark acknowledged
-        await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
-          method: 'PATCH',
-          headers: {
-            'apikey': SERVICE_KEY,
-            'Authorization': 'Bearer ' + SERVICE_KEY,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal',
-          },
-          body: JSON.stringify({ status: 'acknowledged', acknowledged_at: new Date().toISOString() }),
-        });
+        try {
+          server.send(JSON.stringify(ocppMsg));
+          const commandUid = ocppMsg[1];
+          outboundCommands[commandUid] = { commandId: cmd.id, command: cmd.command };
+
+          // Mark acknowledged (sent to charger socket)
+          await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SERVICE_KEY,
+              'Authorization': 'Bearer ' + SERVICE_KEY,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: JSON.stringify({ status: 'acknowledged', acknowledged_at: new Date().toISOString() }),
+          });
+        } catch (sendErr) {
+          await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SERVICE_KEY,
+              'Authorization': 'Bearer ' + SERVICE_KEY,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: JSON.stringify({
+              status: 'failed',
+              completed_at: new Date().toISOString(),
+              result: { error: 'Failed to send over WebSocket', detail: String(sendErr) },
+            }),
+          });
+        }
       }
     } catch (e) {
       console.error('Command poll error:', e);
@@ -282,7 +351,7 @@ function nextTransactionId() {
 }
 
 function mapCommandToOcpp(cmd, persistedTransactionId = null) {
-  const uid = cmd.id.substring(0, 8);
+  const uid = cmd.id;
   switch (cmd.command) {
     case 'start':
       return [2, uid, 'RemoteStartTransaction', { connectorId: 1, idTag: 'juiceninja' }];
