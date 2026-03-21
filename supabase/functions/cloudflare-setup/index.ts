@@ -166,6 +166,7 @@ async function handleWebSocket(request) {
               ? new TextDecoder().decode(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength))
               : String(raw);
       const msg = JSON.parse(text.trim());
+      lastRxAt = Date.now();
 
       // OCPP 1.6J message format: [MessageTypeId, UniqueId, Action, Payload]
       // or [MessageTypeId, UniqueId, Payload] for responses
