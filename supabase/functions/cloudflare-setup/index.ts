@@ -67,7 +67,6 @@ async function handleRequest(request) {
 const OCPP_BRIDGE_SCRIPT = `
 const SUPABASE_URL = 'SUPABASE_URL_PLACEHOLDER';
 const SERVICE_KEY = 'SERVICE_KEY_PLACEHOLDER';
-const KV_NAMESPACE = typeof DEVICE_STATE !== 'undefined' ? DEVICE_STATE : null;
 
 const STATUS_REQUEST_INTERVAL_MS = 30_000;
 const METER_REQUEST_INTERVAL_MS = 10_000;
@@ -161,37 +160,26 @@ async function handleWebSocket(request) {
   let lastDeviceTouchAt = 0;
   let isDisconnected = false;
 
-  // Restore session state from KV on reconnect
-  if (KV_NAMESPACE) {
-    try {
-      const saved = await KV_NAMESPACE.get('device:' + resolvedDeviceId, 'json');
-      if (saved) {
-        if (saved.activeTransactionId) activeTransactions[resolvedDeviceId] = saved.activeTransactionId;
-        if (typeof saved.lastMeasuredAmps === 'number') lastMeasuredAmps = saved.lastMeasuredAmps;
-        console.log('Restored KV state for ' + resolvedDeviceId + ': txId=' + saved.activeTransactionId + ' amps=' + saved.lastMeasuredAmps);
-      }
-    } catch (e) {
-      console.error('KV restore failed:', e);
+  // Restore session state from DB on reconnect — seed lastMeasuredAmps from latest telemetry
+  // and activeTransactions from the persisted active_transaction_id so crash recovery is instant
+  try {
+    const seedRes = await fetch(SUPABASE_URL + '/rest/v1/telemetry?device_id=eq.' + resolvedDeviceId + '&order=recorded_at.desc&limit=1&select=amps', {
+      headers: { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + SERVICE_KEY },
+    });
+    const seedData = await seedRes.json();
+    if (seedData && seedData[0] && typeof seedData[0].amps === 'number') {
+      lastMeasuredAmps = seedData[0].amps;
     }
+    const devSeedRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id', {
+      headers: { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + SERVICE_KEY },
+    });
+    const devSeedData = await devSeedRes.json();
+    const seedTxId = normalizeTransactionId(devSeedData?.[0]?.active_transaction_id);
+    if (seedTxId) activeTransactions[resolvedDeviceId] = seedTxId;
+    console.log('Restored state for ' + resolvedDeviceId + ': txId=' + seedTxId + ' amps=' + lastMeasuredAmps);
+  } catch (e) {
+    console.error('State restore on connect failed:', e);
   }
-
-  // Persist session state to KV (debounced — at most every 5s)
-  let lastKvWriteAt = 0;
-  const persistToKv = async (force = false) => {
-    if (!KV_NAMESPACE) return;
-    const now = Date.now();
-    if (!force && now - lastKvWriteAt < 5000) return;
-    lastKvWriteAt = now;
-    try {
-      await KV_NAMESPACE.put('device:' + resolvedDeviceId, JSON.stringify({
-        activeTransactionId: activeTransactions[resolvedDeviceId] || null,
-        lastMeasuredAmps,
-        updatedAt: new Date().toISOString(),
-      }), { expirationTtl: 86400 }); // 24h TTL
-    } catch (e) {
-      console.error('KV persist failed:', e);
-    }
-  };
 
   const touchDevice = async (extra = {}, force = false) => {
     const now = Date.now();
@@ -230,7 +218,6 @@ async function handleWebSocket(request) {
       const msg = JSON.parse(text.trim());
       lastRxAt = Date.now();
       await touchDevice();
-      persistToKv();
 
       // OCPP 1.6J message format: [MessageTypeId, UniqueId, Action, Payload]
       // or [MessageTypeId, UniqueId, Payload] for responses
@@ -769,13 +756,6 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
     case 'StartTransaction': {
       const txId = nextTransactionId();
       activeTransactions[deviceId] = txId;
-      if (KV_NAMESPACE) {
-        try {
-          await KV_NAMESPACE.put('device:' + deviceId, JSON.stringify({
-            activeTransactionId: txId, lastMeasuredAmps: 0, updatedAt: new Date().toISOString(),
-          }), { expirationTtl: 86400 });
-        } catch (_) {}
-      }
       await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
         method: 'PATCH',
         headers: {
@@ -792,11 +772,6 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
 
     case 'StopTransaction':
       delete activeTransactions[deviceId];
-      if (KV_NAMESPACE) {
-        try {
-          await KV_NAMESPACE.delete('device:' + deviceId);
-        } catch (_) {}
-      }
       await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
         method: 'PATCH',
         headers: {
@@ -880,53 +855,15 @@ Deno.serve(async (req) => {
       const apiWorkerData = await apiWorkerRes.json();
       results.api_worker = apiWorkerData.success ? "deployed" : apiWorkerData.errors;
 
-      // Step: Ensure KV namespace exists
-      const KV_NAMESPACE_TITLE = 'juice-ninja-device-state';
-      let kvNamespaceId = null;
-      try {
-        const kvList = await cfFetch(`/accounts/${accountId}/storage/kv/namespaces`, token);
-        const existing = (kvList.result || []).find((ns: any) => ns.title === KV_NAMESPACE_TITLE);
-        if (existing) {
-          kvNamespaceId = existing.id;
-          results.kv_namespace = 'already exists';
-        } else {
-          const kvCreate = await cfFetch(`/accounts/${accountId}/storage/kv/namespaces`, token, {
-            method: 'POST',
-            body: JSON.stringify({ title: KV_NAMESPACE_TITLE }),
-          });
-          kvNamespaceId = kvCreate.result?.id;
-          results.kv_namespace = 'created';
-        }
-      } catch (e) {
-        results.kv_namespace = `error: ${e.message}`;
-      }
-
-      // Deploy OCPP bridge worker (with KV binding)
+      // Deploy OCPP bridge worker
       const ocppScript = OCPP_BRIDGE_SCRIPT
         .replace(/SUPABASE_URL_PLACEHOLDER/g, supabaseUrl)
         .replace(/SERVICE_KEY_PLACEHOLDER/g, serviceKey);
 
-      // Use form-data upload to attach KV binding metadata
-      const ocppMetadata: any = {
-        main_module: 'worker.js',
-        bindings: [],
-      };
-      if (kvNamespaceId) {
-        ocppMetadata.bindings.push({
-          type: 'kv_namespace',
-          name: 'DEVICE_STATE',
-          namespace_id: kvNamespaceId,
-        });
-      }
-
-      const ocppForm = new FormData();
-      ocppForm.append('metadata', new Blob([JSON.stringify(ocppMetadata)], { type: 'application/json' }));
-      ocppForm.append('worker.js', new Blob([ocppScript], { type: 'application/javascript+module' }), 'worker.js');
-
       const ocppWorkerRes = await fetch(`${CF_API}/accounts/${accountId}/workers/scripts/juice-ninja-ocpp-bridge`, {
         method: "PUT",
-        headers: { "Authorization": `Bearer ${token}` },
-        body: ocppForm,
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/javascript" },
+        body: ocppScript,
       });
       const ocppWorkerData = await ocppWorkerRes.json();
       results.ocpp_worker = ocppWorkerData.success ? "deployed" : ocppWorkerData.errors;
