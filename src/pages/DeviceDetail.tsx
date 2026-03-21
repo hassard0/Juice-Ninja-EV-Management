@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { BatteryCharging, ArrowLeft, Zap, Activity, Thermometer, Wifi, WifiOff, Loader2, Clock, Plus, Play, Square, Trash2 } from "lucide-react";
+import { BatteryCharging, ArrowLeft, Zap, Activity, Thermometer, Wifi, WifiOff, Loader2, Clock, Plus, Play, Square, Trash2, ChevronLeft, ChevronRight, Car } from "lucide-react";
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LineChart, Line } from "recharts";
 import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
@@ -33,6 +33,9 @@ export default function DeviceDetail() {
   const [newEndTime, setNewEndTime] = useState("07:00");
   const [newDays, setNewDays] = useState<number[]>([1, 2, 3, 4, 5]);
 
+  // Chart date navigation — offset in days from today (0 = today, -1 = yesterday, etc.)
+  const [chartDayOffset, setChartDayOffset] = useState(0);
+
   const fetchDevice = useCallback(async () => {
     if (!id) return;
     const { data, error } = await supabase.from("devices").select("*").eq("id", id).single();
@@ -56,24 +59,41 @@ export default function DeviceDetail() {
     fetchSchedules();
   }, [fetchDevice, fetchSchedules]);
 
-  // Fetch real telemetry for last 24h
+  // Compute chart date range based on offset
+  const chartRange = useMemo(() => {
+    const end = new Date();
+    end.setDate(end.getDate() + chartDayOffset + 1);
+    end.setHours(0, 0, 0, 0);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 1);
+    return { start, end };
+  }, [chartDayOffset]);
+
+  const chartDateLabel = useMemo(() => {
+    if (chartDayOffset === 0) return "Today";
+    if (chartDayOffset === -1) return "Yesterday";
+    const d = new Date();
+    d.setDate(d.getDate() + chartDayOffset);
+    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }, [chartDayOffset]);
+
+  // Fetch telemetry for the selected chart day
   const { data: rawTelemetry = [] } = useQuery<Telemetry[]>({
-    queryKey: ["telemetry_device_24h", id],
+    queryKey: ["telemetry_device_day", id, chartDayOffset],
     queryFn: async () => {
       if (!id) return [];
-      const since = new Date();
-      since.setHours(since.getHours() - 24);
       const { data, error } = await supabase
         .from("telemetry")
         .select("*")
         .eq("device_id", id)
-        .gte("recorded_at", since.toISOString())
+        .gte("recorded_at", chartRange.start.toISOString())
+        .lt("recorded_at", chartRange.end.toISOString())
         .order("recorded_at");
       if (error) throw error;
       return data || [];
     },
     enabled: !!id,
-    refetchInterval: 30000,
+    refetchInterval: chartDayOffset === 0 ? 30000 : false,
   });
 
   // Group telemetry by hour for charts
@@ -100,10 +120,11 @@ export default function DeviceDetail() {
       }));
   }, [rawTelemetry]);
 
-  // Latest telemetry values
-  const latest = rawTelemetry.length > 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
-  // Use device.updated_at (set by OCPP bridge on every heartbeat/message) for online status
+  // Latest telemetry values (always from today's data or latest available)
+  const latest = rawTelemetry.length > 0 && chartDayOffset === 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
   const latestAge = device ? Date.now() - new Date(device.updated_at).getTime() : Infinity;
+
+  const vehicleConnected = (device as any)?.vehicle_connected ?? false;
 
   const handleAddSchedule = async () => {
     if (!device || !user) return;
@@ -150,6 +171,10 @@ export default function DeviceDetail() {
   const isCharging = currentAmps > 1 && latestTeleAge < 2 * 60 * 1000;
   const isOnline = latestAge < 5 * 60 * 1000;
 
+  // Can go back up to 365 days
+  const canGoBack = chartDayOffset > -365;
+  const canGoForward = chartDayOffset < 0;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
@@ -174,11 +199,19 @@ export default function DeviceDetail() {
             </div>
             <p className="text-sm text-muted-foreground">
               {device.firmware_type || "Unknown firmware"}{device.url ? ` · ${device.url}` : ""}
+              {(device as any).timezone ? ` · ${(device as any).timezone.replace(/_/g, " ")}` : ""}
             </p>
           </div>
-          <Badge className={isOnline ? "bg-primary text-primary-foreground" : "bg-destructive/15 text-destructive"}>
-            {isOnline ? <><Wifi className="h-3 w-3 mr-1" /> Online</> : <><WifiOff className="h-3 w-3 mr-1" /> Offline</>}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {vehicleConnected && (
+              <Badge className="bg-primary/10 text-primary">
+                <Car className="h-3 w-3 mr-1" /> Vehicle connected
+              </Badge>
+            )}
+            <Badge className={isOnline ? "bg-primary text-primary-foreground" : "bg-destructive/15 text-destructive"}>
+              {isOnline ? <><Wifi className="h-3 w-3 mr-1" /> Online</> : <><WifiOff className="h-3 w-3 mr-1" /> Offline</>}
+            </Badge>
+          </div>
         </div>
 
         {/* Live stats */}
@@ -188,7 +221,7 @@ export default function DeviceDetail() {
             { label: "Current", value: `${currentAmps.toFixed(1)} A`, icon: Activity },
             { label: "Voltage", value: `${currentVoltage.toFixed(0)} V`, icon: Zap },
             { label: "Temperature", value: currentTemp != null ? `${currentTemp.toFixed(0)}°C` : "—", icon: Thermometer },
-            { label: "Total energy", value: `${(totalWh / 1000).toFixed(1)} kWh`, icon: Zap },
+            { label: "Session energy", value: `${(totalWh / 1000).toFixed(1)} kWh`, icon: Zap },
           ].map((s) => (
             <Card key={s.label}>
               <CardContent className="p-4">
@@ -206,63 +239,99 @@ export default function DeviceDetail() {
 
         {/* Quick controls */}
         <div className="flex gap-3">
-          <Button className="active:scale-[0.97] transition-transform" onClick={async () => {
-            const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "start" });
-            if (error) toast.error(error.message);
-            else toast.success("Start command queued — charger will pick it up on next poll");
-          }}>
+          <Button
+            className="active:scale-[0.97] transition-transform"
+            disabled={!isOnline || !vehicleConnected || isCharging}
+            onClick={async () => {
+              const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "start" });
+              if (error) toast.error(error.message);
+              else toast.success("Start command queued — charger will pick it up on next poll");
+            }}
+          >
             <Play className="h-4 w-4 mr-1" /> Start charging
           </Button>
-          <Button variant="destructive" className="active:scale-[0.97] transition-transform" onClick={async () => {
-            const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "stop" });
-            if (error) toast.error(error.message);
-            else toast.success("Stop command queued — charger will pick it up on next poll");
-          }}>
+          <Button
+            variant="destructive"
+            className="active:scale-[0.97] transition-transform"
+            disabled={!isOnline || !isCharging}
+            onClick={async () => {
+              const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "stop" });
+              if (error) toast.error(error.message);
+              else toast.success("Stop command queued — charger will pick it up on next poll");
+            }}
+          >
             <Square className="h-4 w-4 mr-1" /> Stop charging
           </Button>
+          {!vehicleConnected && isOnline && (
+            <p className="text-sm text-muted-foreground self-center ml-2">Plug in a vehicle to enable controls</p>
+          )}
         </div>
 
-        {/* Telemetry charts */}
-        {telemetryByHour.length > 0 ? (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Energy (24h)</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={telemetryByHour} barSize={14}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="hour" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} interval={3} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} unit=" kWh" width={52} />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", fontSize: 12 }} />
-                  <Bar dataKey="kwh" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-base">Current & voltage (24h)</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={telemetryByHour}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="hour" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} interval={3} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", fontSize: 12 }} />
-                  <Line type="monotone" dataKey="amps" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Amps" />
-                  <Line type="monotone" dataKey="voltage" stroke="hsl(var(--accent))" strokeWidth={2} dot={false} name="Voltage" yAxisId={0} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+        {/* Telemetry charts with date navigation */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Telemetry</h2>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoBack} onClick={() => setChartDayOffset((o) => o - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium tabular-nums min-w-[100px] text-center">{chartDateLabel}</span>
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoForward} onClick={() => setChartDayOffset((o) => o + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              {chartDayOffset !== 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setChartDayOffset(0)} className="text-xs">
+                  Today
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {telemetryByHour.length > 0 ? (
+            <div className="grid lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader><CardTitle className="text-base">Energy</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={telemetryByHour} barSize={14}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="hour" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} interval={3} />
+                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} unit=" kWh" width={52} />
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", fontSize: 12 }} />
+                      <Bar dataKey="kwh" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-base">Current & voltage</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={telemetryByHour}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="hour" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} interval={3} />
+                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", fontSize: 12 }} />
+                      <Line type="monotone" dataKey="amps" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Amps" />
+                      <Line type="monotone" dataKey="voltage" stroke="hsl(var(--accent))" strokeWidth={2} dot={false} name="Voltage" yAxisId={0} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Activity className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  {chartDayOffset === 0
+                    ? "No telemetry data today. Charts will appear once the charger sends meter values."
+                    : `No telemetry data for ${chartDateLabel}.`}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
-        ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Activity className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">No telemetry data in the last 24 hours. Charts will appear once the charger sends meter values.</p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Schedules */}
         <Card>
