@@ -311,6 +311,12 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
       if (connectorId === 1 || connectorId === undefined) {
         // Preparing, Charging, SuspendedEV, SuspendedEVSE, Finishing all indicate vehicle connected
         const vehicleConnected = ['Preparing', 'Charging', 'SuspendedEV', 'SuspendedEVSE', 'Finishing'].includes(connectorStatus);
+        const chargingStatus = connectorStatus === 'Charging' ? 'charging'
+          : ['SuspendedEV', 'SuspendedEVSE'].includes(connectorStatus) ? 'suspended'
+          : ['Preparing', 'Finishing'].includes(connectorStatus) ? 'preparing'
+          : connectorStatus === 'Available' ? 'idle'
+          : connectorStatus === 'Faulted' ? 'faulted'
+          : 'unknown';
         await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
           method: 'PATCH',
           headers: {
@@ -319,7 +325,7 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
             'Content-Type': 'application/json',
             'Prefer': 'return=minimal',
           },
-          body: JSON.stringify({ vehicle_connected: vehicleConnected }),
+          body: JSON.stringify({ vehicle_connected: vehicleConnected, charging_status: chargingStatus }),
         });
       }
       server.send(JSON.stringify([3, uniqueId, {}]));
