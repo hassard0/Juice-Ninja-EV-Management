@@ -197,7 +197,7 @@ export default function DeviceDetail() {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">{device.name}</h1>
-              <ChargerSettingsDialog device={device} onUpdated={fetchDevice} />
+              <ChargerSettingsDialog device={device} onUpdated={() => queryClient.invalidateQueries({ queryKey: ["device", id] })} />
             </div>
             <p className="text-sm text-muted-foreground">
               {device.firmware_type || "Unknown firmware"}{device.url ? ` · ${device.url}` : ""}
