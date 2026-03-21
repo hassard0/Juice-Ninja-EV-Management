@@ -267,13 +267,17 @@ async function handleWebSocket(request) {
   return new Response(null, { status: 101, webSocket: client, headers: responseHeaders });
 }
 
+// Track active transaction IDs per device
+const activeTransactions = {};
+
 function mapCommandToOcpp(cmd) {
   const uid = cmd.id.substring(0, 8);
   switch (cmd.command) {
     case 'start':
       return [2, uid, 'RemoteStartTransaction', { connectorId: 1, idTag: 'juiceninja' }];
     case 'stop':
-      return [2, uid, 'RemoteStopTransaction', { transactionId: 0 }];
+      const txId = activeTransactions[cmd.device_id] || 0;
+      return [2, uid, 'RemoteStopTransaction', { transactionId: txId }];
     case 'set_current':
       const limit = cmd.payload?.amps || 32;
       return [2, uid, 'SetChargingProfile', {
@@ -375,9 +379,12 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
       server.send(JSON.stringify([3, uniqueId, {}]));
       break;
 
-    case 'StartTransaction':
-      server.send(JSON.stringify([3, uniqueId, { transactionId: Date.now(), idTagInfo: { status: 'Accepted' } }]));
+    case 'StartTransaction': {
+      const txId = Date.now();
+      activeTransactions[deviceId] = txId;
+      server.send(JSON.stringify([3, uniqueId, { transactionId: txId, idTagInfo: { status: 'Accepted' } }]));
       break;
+    }
 
     case 'StopTransaction':
       server.send(JSON.stringify([3, uniqueId, { idTagInfo: { status: 'Accepted' } }]));
