@@ -78,7 +78,7 @@ export default function Dashboard() {
   });
 
   // Fetch weekly telemetry for energy chart
-  const { data: weeklyTelemetry = [] } = useQuery({
+  const { data: weeklyEnergyData = [] } = useQuery({
     queryKey: ["telemetry_weekly", devices.map((d) => d.id)],
     queryFn: async () => {
       if (!user || devices.length === 0) return [];
@@ -92,13 +92,23 @@ export default function Dashboard() {
         .gte("recorded_at", sevenDaysAgo.toISOString())
         .order("recorded_at");
       if (!data || data.length === 0) return [];
-      const dayMap: Record<string, number> = {};
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      data.forEach((row) => {
+      // Group by calendar day, compute delta (max - min) per day
+      const dayReadings: Record<string, number[]> = {};
+      data.forEach((row: any) => {
+        if (row.wh == null) return;
         const d = new Date(row.recorded_at);
-        const key = dayNames[d.getDay()];
-        dayMap[key] = (dayMap[key] || 0) + (row.wh || 0) / 1000;
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        if (!dayReadings[key]) dayReadings[key] = [];
+        dayReadings[key].push(row.wh);
       });
+      const dayMap: Record<string, number> = {};
+      for (const [key, values] of Object.entries(dayReadings)) {
+        const [y, m, dd] = key.split("-").map(Number);
+        const dayName = dayNames[new Date(y, m, dd).getDay()];
+        const delta = Math.max(0, Math.max(...values) - Math.min(...values)) / 1000;
+        dayMap[dayName] = (dayMap[dayName] || 0) + delta;
+      }
       return Object.entries(dayMap).map(([day, kwh]) => ({ day, kwh: parseFloat(kwh.toFixed(1)) }));
     },
     enabled: !!user && devices.length > 0,
@@ -175,7 +185,7 @@ export default function Dashboard() {
     }
   };
 
-  const energyChartData = weeklyTelemetry;
+  const energyChartData = weeklyEnergyData;
 
   return (
     <div className="min-h-screen bg-background">
