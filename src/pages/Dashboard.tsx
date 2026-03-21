@@ -3,10 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BatteryCharging, Zap, Activity, Thermometer, LogOut, Play, Square, Clock, BarChart3 } from "lucide-react";
+import { BatteryCharging, Zap, Activity, Thermometer, LogOut, Play, Square, BarChart3, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
-import { useState } from "react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import AddChargerDialog from "@/components/AddChargerDialog";
@@ -15,7 +14,6 @@ import type { Database } from "@/integrations/supabase/types";
 type Device = Database["public"]["Tables"]["devices"]["Row"];
 
 const statusForDevice = (device: Device): "charging" | "idle" | "offline" | "scheduled" => {
-  // Simulated status — in production this would come from telemetry
   const hash = device.id.charCodeAt(0) % 4;
   return (["charging", "idle", "scheduled", "idle"] as const)[hash];
 };
@@ -27,7 +25,6 @@ const statusColor: Record<string, string> = {
   scheduled: "bg-accent text-accent-foreground",
 };
 
-// Mock telemetry per device (demo)
 const mockTelemetry = (device: Device) => {
   const seed = device.id.charCodeAt(2);
   const status = statusForDevice(device);
@@ -39,16 +36,6 @@ const mockTelemetry = (device: Device) => {
     temperature: 18 + (seed % 20),
   };
 };
-
-const mockEnergyData = [
-  { day: "Mon", kwh: 28.4 },
-  { day: "Tue", kwh: 34.1 },
-  { day: "Wed", kwh: 19.7 },
-  { day: "Thu", kwh: 42.3 },
-  { day: "Fri", kwh: 37.9 },
-  { day: "Sat", kwh: 15.2 },
-  { day: "Sun", kwh: 22.8 },
-];
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
@@ -62,9 +49,64 @@ export default function Dashboard() {
     },
   });
 
+  const { data: userSettings } = useQuery({
+    queryKey: ["user_settings"],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from("user_settings").select("*").eq("user_id", user.id).maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: tariffs = [] } = useQuery({
+    queryKey: ["tariff_rates"],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase.from("tariff_rates").select("*").eq("user_id", user.id).order("start_time");
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  // Query real telemetry for energy chart
+  const { data: telemetryData = [] } = useQuery({
+    queryKey: ["telemetry_weekly"],
+    queryFn: async () => {
+      if (!user || devices.length === 0) return [];
+      const deviceIds = devices.map((d) => d.id);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const { data } = await supabase
+        .from("telemetry")
+        .select("wh, recorded_at")
+        .in("device_id", deviceIds)
+        .gte("recorded_at", sevenDaysAgo.toISOString())
+        .order("recorded_at");
+
+      if (!data || data.length === 0) return [];
+
+      // Group by day
+      const dayMap: Record<string, number> = {};
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      data.forEach((row) => {
+        const d = new Date(row.recorded_at);
+        const key = dayNames[d.getDay()];
+        dayMap[key] = (dayMap[key] || 0) + (row.wh || 0) / 1000;
+      });
+
+      return Object.entries(dayMap).map(([day, kwh]) => ({ day, kwh: parseFloat(kwh.toFixed(1)) }));
+    },
+    enabled: !!user && devices.length > 0,
+  });
+
+  const sym = userSettings?.currency_symbol || "£";
+  const defaultRate = tariffs.find((t) => t.is_default)?.cost_per_kwh || tariffs[0]?.cost_per_kwh || 0.25;
+
   const activeCount = devices.filter((d) => statusForDevice(d) === "charging").length;
   const totalKwhToday = devices.reduce((sum, d) => sum + mockTelemetry(d).session_kwh, 0);
-  const totalCostToday = totalKwhToday * 0.25;
+  const totalCostToday = totalKwhToday * defaultRate;
 
   const handleStartStop = (device: Device) => {
     const status = statusForDevice(device);
@@ -75,6 +117,9 @@ export default function Dashboard() {
     }
   };
 
+  // Use real telemetry if available, otherwise show nothing (no fake data)
+  const energyChartData = telemetryData;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
@@ -84,6 +129,9 @@ export default function Dashboard() {
             Juice Ninja
           </Link>
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" asChild title="Settings">
+              <Link to="/settings"><Settings className="h-4 w-4" /></Link>
+            </Button>
             <span className="text-sm text-muted-foreground hidden sm:inline">{user?.email}</span>
             <Button variant="ghost" size="icon" onClick={signOut} title="Sign out">
               <LogOut className="h-4 w-4" />
@@ -134,7 +182,7 @@ export default function Dashboard() {
                 <div className="rounded-lg bg-accent/20 p-2 text-accent-foreground"><BarChart3 className="h-5 w-5" /></div>
                 <div>
                   <p className="text-sm text-muted-foreground">Cost today</p>
-                  <p className="text-2xl font-bold tabular-nums">£{totalCostToday.toFixed(2)}</p>
+                  <p className="text-2xl font-bold tabular-nums">{sym}{totalCostToday.toFixed(2)}</p>
                 </div>
               </div>
             </CardContent>
@@ -213,31 +261,33 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* Weekly energy chart */}
-        <section>
-          <h2 className="text-xl font-semibold mb-4">Weekly energy usage</h2>
-          <Card>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={mockEnergyData} barSize={32}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="day" tick={{ fontSize: 13 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 13 }} tickLine={false} axisLine={false} unit=" kWh" width={64} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                      fontSize: 13,
-                    }}
-                    formatter={(value: number) => [`${value} kWh`, "Energy"]}
-                  />
-                  <Bar dataKey="kwh" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </section>
+        {/* Weekly energy chart — only shows with real data */}
+        {energyChartData.length > 0 && (
+          <section>
+            <h2 className="text-xl font-semibold mb-4">Weekly energy usage</h2>
+            <Card>
+              <CardContent className="p-6">
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={energyChartData} barSize={32}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="day" tick={{ fontSize: 13 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 13 }} tickLine={false} axisLine={false} unit=" kWh" width={64} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "var(--radius)",
+                        fontSize: 13,
+                      }}
+                      formatter={(value: number) => [`${value} kWh`, "Energy"]}
+                    />
+                    <Bar dataKey="kwh" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </section>
+        )}
       </main>
     </div>
   );
