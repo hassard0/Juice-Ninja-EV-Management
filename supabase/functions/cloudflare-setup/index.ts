@@ -548,7 +548,7 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
       server.send(JSON.stringify([3, uniqueId, {
         status: 'Accepted',
         currentTime: new Date().toISOString(),
-        interval: 60,
+        interval: 30,
       }]));
       break;
 
