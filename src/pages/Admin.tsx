@@ -236,7 +236,7 @@ export default function Admin() {
           <CardHeader>
             <CardTitle className="text-base">Recent Sessions</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
