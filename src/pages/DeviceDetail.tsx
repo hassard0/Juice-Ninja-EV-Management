@@ -331,6 +331,12 @@ export default function DeviceDetail() {
             className="active:scale-[0.97] transition-transform"
             disabled={!isOnline || !isCharging}
             onClick={async () => {
+              const lastSeenMs = new Date(device.updated_at).getTime();
+              if (Date.now() - lastSeenMs > 120000) {
+                toast.error("Charger is disconnected — reconnect it, then try Stop again");
+                return;
+              }
+
               const txId = (device as any)?.active_transaction_id;
               const { error } = await supabase.from("device_commands").insert({
                 device_id: device.id,

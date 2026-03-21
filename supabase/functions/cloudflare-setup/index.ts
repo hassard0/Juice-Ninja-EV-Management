@@ -201,8 +201,7 @@ async function handleWebSocket(request) {
         body: JSON.stringify({ updated_at: new Date().toISOString() }),
       });
 
-      // Check if vehicle is connected — if so, request fresh telemetry
-      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=vehicle_connected,charging_status,active_transaction_id', {
+      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
@@ -210,11 +209,6 @@ async function handleWebSocket(request) {
       });
       const devData = await devRes.json();
       const dev = devData && devData[0];
-      if (dev && (dev.vehicle_connected || (dev.charging_status && dev.charging_status !== 'idle' && dev.charging_status !== 'unknown'))) {
-        // Request MeterValues and StatusNotification from the charger
-        server.send(JSON.stringify([2, 'tv-' + Date.now(), 'TriggerMessage', { requestedMessage: 'MeterValues' }]));
-        server.send(JSON.stringify([2, 'ts-' + Date.now(), 'TriggerMessage', { requestedMessage: 'StatusNotification' }]));
-      }
 
       const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at', {
         headers: {
@@ -286,21 +280,9 @@ function mapCommandToOcpp(cmd, persistedTransactionId = null) {
       if (txId) {
         return [2, uid, 'RemoteStopTransaction', { transactionId: txId }];
       }
-      // Fallback for firmware that doesn't expose/stick transaction IDs:
-      // set charging profile limit to 0A to force output to stop.
-      return [2, uid, 'SetChargingProfile', {
-        connectorId: 1,
-        csChargingProfiles: {
-          chargingProfileId: 1,
-          stackLevel: 0,
-          chargingProfilePurpose: 'TxDefaultProfile',
-          chargingProfileKind: 'Absolute',
-          chargingSchedule: {
-            chargingRateUnit: 'A',
-            chargingSchedulePeriod: [{ startPeriod: 0, limit: 0 }],
-          },
-        },
-      }];
+      // Fallback when transactionId is unknown: request a soft reset,
+      // which most chargers apply immediately and stops active charging.
+      return [2, uid, 'Reset', { type: 'Soft' }];
     }
     case 'set_current': {
       const limit = cmd.payload?.amps || 32;
