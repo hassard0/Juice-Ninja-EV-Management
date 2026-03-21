@@ -1,0 +1,1 @@
+ALTER TABLE public.user_settings ADD COLUMN IF NOT EXISTS time_format text NOT NULL DEFAULT '24h';

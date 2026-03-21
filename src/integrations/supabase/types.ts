@@ -301,6 +301,7 @@ export type Database = {
           currency: string
           currency_symbol: string
           id: string
+          time_format: string
           updated_at: string
           user_id: string
         }
@@ -309,6 +310,7 @@ export type Database = {
           currency?: string
           currency_symbol?: string
           id?: string
+          time_format?: string
           updated_at?: string
           user_id: string
         }
@@ -317,6 +319,7 @@ export type Database = {
           currency?: string
           currency_symbol?: string
           id?: string
+          time_format?: string
           updated_at?: string
           user_id?: string
         }

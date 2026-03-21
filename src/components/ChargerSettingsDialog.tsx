@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Settings, Save, Loader2, Trash2, Copy, Check, KeyRound, Wifi, RefreshCw, AlertTriangle, ExternalLink } from "lucide-react";
+import { Settings, Save, Loader2, Trash2, Copy, Check, KeyRound, Wifi, RefreshCw, AlertTriangle, ExternalLink, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import type { Database } from "@/integrations/supabase/types";
@@ -314,8 +314,7 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
       firmware_type: firmwareType || null,
       url: location.trim() || null,
       timezone,
-      max_amps: maxAmps,
-      default_amps: Math.min(defaultAmps, maxAmps),
+      default_amps: Math.min(defaultAmps, maxAmps || 48),
       auto_start: autoStart,
     } as any).eq("id", device.id);
     if (error) toast.error(error.message);
@@ -543,22 +542,12 @@ Content-Type: application/json
                 </Select>
               </div>
             </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Max amps (charger limit)</Label>
-                <Select value={String(maxAmps)} onValueChange={(v) => { const m = parseInt(v); setMaxAmps(m); if (defaultAmps > m) setDefaultAmps(m); }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AMP_OPTIONS.map((a) => (
-                      <SelectItem key={a} value={String(a)}>{a}A</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Maximum amperage your charger hardware supports</p>
+            {maxAmps > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Zap className="h-4 w-4" />
+                <span>Charger maximum: <strong className="text-foreground">{maxAmps}A</strong></span>
               </div>
-            </div>
+            )}
 
             <div className="rounded-lg border p-4 space-y-4">
               <p className="text-sm font-medium">Charging defaults</p>
