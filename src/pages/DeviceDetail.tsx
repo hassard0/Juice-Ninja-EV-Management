@@ -384,7 +384,7 @@ export default function DeviceDetail() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Days</Label>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                   {DAYS.map((day, i) => {
                     const dayNum = i + 1;
                     const selected = newDays.includes(dayNum);
