@@ -371,12 +371,12 @@ export default function DeviceDetail() {
               <p className="text-sm font-medium">Add schedule</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Start time</Label>
-                  <Input type="time" value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)} />
+                  <Label className="text-xs">Start time · {formatTime(newStartTime, timeFormat)}</Label>
+                  <Input type="time" lang={timeInputLang} value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">End time</Label>
-                  <Input type="time" value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)} />
+                  <Label className="text-xs">End time · {formatTime(newEndTime, timeFormat)}</Label>
+                  <Input type="time" lang={timeInputLang} value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)} />
                 </div>
               </div>
               <div className="space-y-1">

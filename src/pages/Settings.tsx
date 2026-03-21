@@ -279,12 +279,12 @@ export default function Settings() {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Start</Label>
-                    <Input type="time" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+                    <Label className="text-xs">Start · {formatTime(newStart, timeFormat)}</Label>
+                    <Input type="time" lang={timeInputLang} value={newStart} onChange={(e) => setNewStart(e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">End</Label>
-                    <Input type="time" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
+                    <Label className="text-xs">End · {formatTime(newEnd, timeFormat)}</Label>
+                    <Input type="time" lang={timeInputLang} value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Cost ({currencyObj?.symbol}/kWh)</Label>
