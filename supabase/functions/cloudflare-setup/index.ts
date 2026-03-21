@@ -210,7 +210,7 @@ async function handleWebSocket(request) {
       });
 
       // Check if vehicle is connected — if so, request fresh telemetry
-      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=vehicle_connected,charging_status', {
+      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=vehicle_connected,charging_status,active_transaction_id', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
@@ -232,10 +232,8 @@ async function handleWebSocket(request) {
       });
       const commands = await cmdRes.json();
       for (const cmd of (commands || [])) {
-        const ocppMsg = mapCommandToOcpp(cmd);
-        if (ocppMsg) {
-          server.send(JSON.stringify(ocppMsg));
-          // Mark acknowledged
+        const ocppMsg = mapCommandToOcpp(cmd, dev?.active_transaction_id);
+        if (!ocppMsg) {
           await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
             method: 'PATCH',
             headers: {
@@ -244,9 +242,27 @@ async function handleWebSocket(request) {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal',
             },
-            body: JSON.stringify({ status: 'acknowledged', acknowledged_at: new Date().toISOString() }),
+            body: JSON.stringify({
+              status: 'failed',
+              completed_at: new Date().toISOString(),
+              result: { error: 'Unable to build OCPP command payload' },
+            }),
           });
+          continue;
         }
+
+        server.send(JSON.stringify(ocppMsg));
+        // Mark acknowledged
+        await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SERVICE_KEY,
+            'Authorization': 'Bearer ' + SERVICE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({ status: 'acknowledged', acknowledged_at: new Date().toISOString() }),
+        });
       }
     } catch (e) {
       console.error('Command poll error:', e);
@@ -267,18 +283,36 @@ async function handleWebSocket(request) {
   return new Response(null, { status: 101, webSocket: client, headers: responseHeaders });
 }
 
-// Track active transaction IDs per device
+// Track active transaction IDs per device in-memory for low-latency lookup
 const activeTransactions = {};
 
-function mapCommandToOcpp(cmd) {
+function mapCommandToOcpp(cmd, persistedTransactionId = null) {
   const uid = cmd.id.substring(0, 8);
   switch (cmd.command) {
     case 'start':
       return [2, uid, 'RemoteStartTransaction', { connectorId: 1, idTag: 'juiceninja' }];
-    case 'stop':
-      const txId = activeTransactions[cmd.device_id] || 0;
-      return [2, uid, 'RemoteStopTransaction', { transactionId: txId }];
-    case 'set_current':
+    case 'stop': {
+      const txId = cmd.payload?.transactionId || activeTransactions[cmd.device_id] || persistedTransactionId || null;
+      if (txId) {
+        return [2, uid, 'RemoteStopTransaction', { transactionId: txId }];
+      }
+      // Fallback for firmware that doesn't expose/stick transaction IDs:
+      // set charging profile limit to 0A to force output to stop.
+      return [2, uid, 'SetChargingProfile', {
+        connectorId: 1,
+        csChargingProfiles: {
+          chargingProfileId: 1,
+          stackLevel: 0,
+          chargingProfilePurpose: 'TxDefaultProfile',
+          chargingProfileKind: 'Absolute',
+          chargingSchedule: {
+            chargingRateUnit: 'A',
+            chargingSchedulePeriod: [{ startPeriod: 0, limit: 0 }],
+          },
+        },
+      }];
+    }
+    case 'set_current': {
       const limit = cmd.payload?.amps || 32;
       return [2, uid, 'SetChargingProfile', {
         connectorId: 1,
@@ -293,6 +327,7 @@ function mapCommandToOcpp(cmd) {
           },
         },
       }];
+    }
     default:
       return null;
   }
@@ -382,11 +417,32 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
     case 'StartTransaction': {
       const txId = Date.now();
       activeTransactions[deviceId] = txId;
+      await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': 'Bearer ' + SERVICE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ active_transaction_id: txId, charging_status: 'charging', vehicle_connected: true }),
+      });
       server.send(JSON.stringify([3, uniqueId, { transactionId: txId, idTagInfo: { status: 'Accepted' } }]));
       break;
     }
 
     case 'StopTransaction':
+      delete activeTransactions[deviceId];
+      await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': 'Bearer ' + SERVICE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ active_transaction_id: null, charging_status: 'idle' }),
+      });
       server.send(JSON.stringify([3, uniqueId, { idTagInfo: { status: 'Accepted' } }]));
       break;
 
