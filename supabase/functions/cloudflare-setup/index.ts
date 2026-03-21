@@ -147,11 +147,13 @@ async function handleWebSocket(request) {
       const raw = event.data;
       const text = typeof raw === 'string'
         ? raw
-        : raw instanceof ArrayBuffer
-          ? new TextDecoder().decode(raw)
-          : ArrayBuffer.isView(raw)
-            ? new TextDecoder().decode(raw.buffer)
-            : String(raw);
+        : raw instanceof Blob
+          ? await raw.text()
+          : raw instanceof ArrayBuffer
+            ? new TextDecoder().decode(raw)
+            : ArrayBuffer.isView(raw)
+              ? new TextDecoder().decode(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength))
+              : String(raw);
       const msg = JSON.parse(text.trim());
 
       // OCPP 1.6J message format: [MessageTypeId, UniqueId, Action, Payload]
