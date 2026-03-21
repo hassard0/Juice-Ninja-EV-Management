@@ -93,7 +93,7 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
       setCreatedDeviceId(data.id);
       setGeneratedKey(apiKey);
       setStep("credentials");
-      onAdded();
+      // Don't call onAdded yet — wait until user clicks Done
     } catch (err: any) {
       toast.error(err.message);
     } finally {
