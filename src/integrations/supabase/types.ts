@@ -62,6 +62,7 @@ export type Database = {
         Row: {
           api_key: string | null
           auto_start: boolean
+          charging_status: string
           created_at: string
           default_amps: number
           firmware_type: string | null
@@ -78,6 +79,7 @@ export type Database = {
         Insert: {
           api_key?: string | null
           auto_start?: boolean
+          charging_status?: string
           created_at?: string
           default_amps?: number
           firmware_type?: string | null
@@ -94,6 +96,7 @@ export type Database = {
         Update: {
           api_key?: string | null
           auto_start?: boolean
+          charging_status?: string
           created_at?: string
           default_amps?: number
           firmware_type?: string | null
