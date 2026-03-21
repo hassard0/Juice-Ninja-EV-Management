@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BatteryCharging, Zap, Activity, Thermometer, LogOut, Play, Square, BarChart3, Settings } from "lucide-react";
+import { BatteryCharging, Zap, Activity, Thermometer, LogOut, Play, Square, BarChart3, Settings, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
