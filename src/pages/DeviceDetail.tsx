@@ -269,7 +269,7 @@ export default function DeviceDetail() {
   const latestTeleAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
   // Control gating should follow fresh measured current + very fresh device heartbeat
   const CONTROL_TELEMETRY_FRESH_MS = 3 * 60 * 1000;
-  const COMMAND_CHANNEL_FRESH_MS = 90 * 1000;
+  const COMMAND_CHANNEL_FRESH_MS = 45 * 1000;
   const hasFreshTelemetry = latestTeleAge < CONTROL_TELEMETRY_FRESH_MS;
   const hasLiveCurrent = hasFreshTelemetry && currentAmps > 1;
   const isCharging = hasLiveCurrent;
