@@ -189,7 +189,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8 space-y-8">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Overview cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
