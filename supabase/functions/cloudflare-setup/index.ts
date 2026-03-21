@@ -78,13 +78,28 @@ addEventListener('fetch', event => {
 
 async function handleWebSocket(request) {
   const url = new URL(request.url);
-  // Extract device ID from path: /ocpp/<device-id> or /<device-id>
-  const pathParts = url.pathname.split('/').filter(Boolean);
-  const deviceId = pathParts[pathParts.length - 1];
 
-  if (!deviceId) {
+  // Accept both /<device-id> and /<prefix>/<device-id> patterns from different firmware styles
+  const rawParts = url.pathname.split('/').filter(Boolean);
+  const decodedParts = rawParts
+    .map((p) => {
+      try {
+        return decodeURIComponent(p).trim();
+      } catch {
+        return p.trim();
+      }
+    })
+    .filter(Boolean);
+
+  if (decodedParts.length === 0) {
     return new Response('Missing device ID in path. Use wss://ocpp.juice.ninja/<device-id>', { status: 400 });
   }
+
+  // Prefer the last path segment first, then try earlier segments as fallback
+  const orderedCandidates = [
+    decodedParts[decodedParts.length - 1],
+    ...decodedParts.slice(0, -1).reverse(),
+  ].filter((v, i, a) => a.indexOf(v) === i);
 
   // OCPP chargers often require explicit subprotocol negotiation
   const requestedProtocols = (request.headers.get('Sec-WebSocket-Protocol') || '')
@@ -97,29 +112,50 @@ async function handleWebSocket(request) {
   }) || requestedProtocols[0] || null;
 
   // Verify device exists before accepting the socket
-  const verifyRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId + '&select=id,api_key', {
-    headers: {
-      'apikey': SERVICE_KEY,
-      'Authorization': 'Bearer ' + SERVICE_KEY,
-    },
-  });
+  let resolvedDeviceId = null;
+  let device = null;
 
-  if (!verifyRes.ok) {
-    return new Response('Failed to validate device', { status: 502 });
+  for (const candidate of orderedCandidates) {
+    const verifyRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + encodeURIComponent(candidate) + '&select=id,api_key', {
+      headers: {
+        'apikey': SERVICE_KEY,
+        'Authorization': 'Bearer ' + SERVICE_KEY,
+      },
+    });
+
+    if (!verifyRes.ok) {
+      return new Response('Failed to validate device', { status: 502 });
+    }
+
+    const devices = await verifyRes.json();
+    if (devices && devices.length > 0) {
+      resolvedDeviceId = devices[0].id;
+      device = devices[0];
+      break;
+    }
   }
 
-  const devices = await verifyRes.json();
-  if (!devices || devices.length === 0) {
+  if (!resolvedDeviceId || !device) {
     return new Response('Unknown device ID', { status: 403 });
   }
 
-  const device = devices[0];
   const [client, server] = Object.values(new WebSocketPair());
   server.accept();
 
   server.addEventListener('message', async (event) => {
     try {
-      const msg = JSON.parse(event.data);
+      const raw = event.data;
+      const text = typeof raw === 'string'
+        ? raw
+        : raw instanceof Blob
+          ? await raw.text()
+          : raw instanceof ArrayBuffer
+            ? new TextDecoder().decode(raw)
+            : ArrayBuffer.isView(raw)
+              ? new TextDecoder().decode(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength))
+              : String(raw);
+      const msg = JSON.parse(text.trim());
+
       // OCPP 1.6J message format: [MessageTypeId, UniqueId, Action, Payload]
       // or [MessageTypeId, UniqueId, Payload] for responses
       if (!Array.isArray(msg) || msg.length < 3) {
@@ -134,13 +170,13 @@ async function handleWebSocket(request) {
 
       if (messageType === 2) {
         // CALL from charger
-        await handleOcppCall(server, deviceId, device.api_key, uniqueId, action, payload);
+        await handleOcppCall(server, resolvedDeviceId, device.api_key, uniqueId, action, payload);
       } else if (messageType === 3) {
         // CALLRESULT - charger responding to our command
-        console.log('CALLRESULT from ' + deviceId + ':', JSON.stringify(msg));
+        console.log('CALLRESULT from ' + resolvedDeviceId + ':', JSON.stringify(msg));
       } else if (messageType === 4) {
         // CALLERROR
-        console.log('CALLERROR from ' + deviceId + ':', JSON.stringify(msg));
+        console.log('CALLERROR from ' + resolvedDeviceId + ':', JSON.stringify(msg));
       }
     } catch (e) {
       console.error('Error processing message:', e);
@@ -150,7 +186,7 @@ async function handleWebSocket(request) {
   // Poll for pending commands every 10 seconds
   const commandPollInterval = setInterval(async () => {
     try {
-      const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + deviceId + '&status=eq.pending&order=created_at', {
+      const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
