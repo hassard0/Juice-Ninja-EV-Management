@@ -168,29 +168,44 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Currency */}
+        {/* Preferences */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Currency</CardTitle>
-            <CardDescription>Choose the currency for energy cost calculations</CardDescription>
+            <CardTitle className="text-base">Preferences</CardTitle>
+            <CardDescription>Currency and display settings</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex gap-3">
-              <Select value={currency} onValueChange={setCurrency}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((c) => (
-                    <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button onClick={handleSaveCurrency} disabled={savingSettings} className="active:scale-[0.97] transition-transform">
-                {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                Save
-              </Button>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Time format</Label>
+                <Select value={timeFormat} onValueChange={setTimeFormat}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="24h">24-hour (14:30)</SelectItem>
+                    <SelectItem value="12h">12-hour (2:30 PM)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <Button onClick={handleSaveCurrency} disabled={savingSettings} className="active:scale-[0.97] transition-transform">
+              {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              Save preferences
+            </Button>
           </CardContent>
         </Card>
 
