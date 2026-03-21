@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { formatTime } from "@/lib/time";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -52,7 +53,7 @@ export default function Settings() {
       if (settingsRes.data) {
         setSettings(settingsRes.data);
         setCurrency(settingsRes.data.currency);
-        setTimeFormat((settingsRes.data as any).time_format || "24h");
+        setTimeFormat(settingsRes.data.time_format || "24h");
       }
       if (tariffsRes.data) setTariffs(tariffsRes.data);
       setLoading(false);
@@ -69,7 +70,7 @@ export default function Settings() {
         currency,
         currency_symbol: currencyObj?.symbol || "£",
         time_format: timeFormat,
-      } as any).eq("user_id", user.id);
+      }).eq("user_id", user.id);
       if (error) toast.error(error.message);
       else toast.success("Currency updated");
     } else {
@@ -78,7 +79,7 @@ export default function Settings() {
         currency,
         currency_symbol: currencyObj?.symbol || "£",
         time_format: timeFormat,
-      } as any);
+      });
       if (error) toast.error(error.message);
       else toast.success("Settings saved");
     }

@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserSettings } from "@/hooks/useUserSettings";
+import { formatTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +28,7 @@ export default function DeviceDetail() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { timeFormat } = useUserSettings();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [newStartTime, setNewStartTime] = useState("23:00");
@@ -346,7 +349,7 @@ export default function DeviceDetail() {
                 <div className="flex items-center gap-3">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="font-medium tabular-nums">{schedule.start_time.slice(0, 5)} — {schedule.end_time.slice(0, 5)}</p>
+                    <p className="font-medium tabular-nums">{formatTime(schedule.start_time, timeFormat)} — {formatTime(schedule.end_time, timeFormat)}</p>
                     <p className="text-xs text-muted-foreground">{schedule.days_of_week.map((d) => DAYS[d - 1]).join(", ")}</p>
                   </div>
                 </div>
