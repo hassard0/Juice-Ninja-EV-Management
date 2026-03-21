@@ -57,9 +57,8 @@ export default function DeviceDetail() {
   }, [id]);
 
   useEffect(() => {
-    fetchDevice();
     fetchSchedules();
-  }, [fetchDevice, fetchSchedules]);
+  }, [fetchSchedules]);
 
   // Compute chart date range based on offset
   const chartRange = useMemo(() => {
