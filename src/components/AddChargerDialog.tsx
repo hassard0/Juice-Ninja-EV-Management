@@ -116,7 +116,7 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
           <Plus className="h-4 w-4 mr-1" /> Add charger
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto" onInteractOutside={step === "credentials" ? (e) => e.preventDefault() : undefined}>
         {step === "details" ? (
           <>
             <DialogHeader>
