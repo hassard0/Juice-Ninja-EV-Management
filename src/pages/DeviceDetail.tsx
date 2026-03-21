@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,19 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BatteryCharging, ArrowLeft, Zap, Activity, Thermometer, Wifi, WifiOff, Trash2, Save, Loader2, Clock, Plus, Play, Square } from "lucide-react";
+import { BatteryCharging, ArrowLeft, Zap, Activity, Thermometer, Wifi, WifiOff, Loader2, Clock, Plus, Play, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LineChart, Line } from "recharts";
+import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
 import type { Database } from "@/integrations/supabase/types";
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
 type Schedule = Database["public"]["Tables"]["schedules"]["Row"];
 
-// Mock telemetry for demo (until real charger integration)
 const generateMockTelemetry = () => {
   const data = [];
-  const now = Date.now();
   for (let i = 23; i >= 0; i--) {
     const charging = Math.random() > 0.4;
     data.push({
@@ -42,66 +40,35 @@ export default function DeviceDetail() {
   const navigate = useNavigate();
   const [device, setDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [firmwareType, setFirmwareType] = useState("");
   const [telemetry] = useState(generateMockTelemetry);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [newStartTime, setNewStartTime] = useState("23:00");
   const [newEndTime, setNewEndTime] = useState("07:00");
   const [newDays, setNewDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const isOnline = device != null; // Simulated
 
-  useEffect(() => {
+  const fetchDevice = useCallback(async () => {
     if (!id) return;
-    const fetchDevice = async () => {
-      const { data, error } = await supabase.from("devices").select("*").eq("id", id).single();
-      if (error || !data) {
-        toast.error("Charger not found");
-        navigate("/dashboard");
-        return;
-      }
-      setDevice(data);
-      setName(data.name);
-      setUrl(data.url || "");
-      setApiKey(data.api_key || "");
-      setFirmwareType(data.firmware_type || "");
-      setLoading(false);
-    };
-    const fetchSchedules = async () => {
-      const { data } = await supabase.from("schedules").select("*").eq("device_id", id).order("start_time");
-      if (data) setSchedules(data);
-    };
-    fetchDevice();
-    fetchSchedules();
+    const { data, error } = await supabase.from("devices").select("*").eq("id", id).single();
+    if (error || !data) {
+      toast.error("Charger not found");
+      navigate("/dashboard");
+      return;
+    }
+    setDevice(data);
+    setLoading(false);
   }, [id, navigate]);
 
-  const handleSave = async () => {
-    if (!device) return;
-    setSaving(true);
-    const { error } = await supabase.from("devices").update({
-      name: name.trim(),
-      url: url.trim() || null,
-      api_key: apiKey.trim() || null,
-      firmware_type: firmwareType || null,
-    }).eq("id", device.id);
-    if (error) toast.error(error.message);
-    else toast.success("Charger updated");
-    setSaving(false);
-  };
+  const fetchSchedules = useCallback(async () => {
+    if (!id) return;
+    const { data } = await supabase.from("schedules").select("*").eq("device_id", id).order("start_time");
+    if (data) setSchedules(data);
+  }, [id]);
 
-  const handleDelete = async () => {
-    if (!device || !confirm("Delete this charger? This cannot be undone.")) return;
-    const { error } = await supabase.from("devices").delete().eq("id", device.id);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Charger deleted");
-      navigate("/dashboard");
-    }
-  };
+  useEffect(() => {
+    fetchDevice();
+    fetchSchedules();
+  }, [fetchDevice, fetchSchedules]);
 
   const handleAddSchedule = async () => {
     if (!device || !user) return;
@@ -115,8 +82,7 @@ export default function DeviceDetail() {
     if (error) toast.error(error.message);
     else {
       toast.success("Schedule added");
-      const { data } = await supabase.from("schedules").select("*").eq("device_id", device.id).order("start_time");
-      if (data) setSchedules(data);
+      fetchSchedules();
     }
     setAddingSchedule(false);
   };
@@ -124,9 +90,7 @@ export default function DeviceDetail() {
   const handleToggleSchedule = async (schedule: Schedule) => {
     const { error } = await supabase.from("schedules").update({ enabled: !schedule.enabled }).eq("id", schedule.id);
     if (error) toast.error(error.message);
-    else {
-      setSchedules((prev) => prev.map((s) => (s.id === schedule.id ? { ...s, enabled: !s.enabled } : s)));
-    }
+    else setSchedules((prev) => prev.map((s) => (s.id === schedule.id ? { ...s, enabled: !s.enabled } : s)));
   };
 
   const handleDeleteSchedule = async (scheduleId: string) => {
@@ -135,7 +99,7 @@ export default function DeviceDetail() {
     else setSchedules((prev) => prev.filter((s) => s.id !== scheduleId));
   };
 
-  if (loading) {
+  if (loading || !device) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -148,6 +112,7 @@ export default function DeviceDetail() {
   const currentTemp = telemetry[telemetry.length - 1]?.temp ?? 0;
   const totalKwh = telemetry.reduce((sum, t) => sum + t.kwh, 0);
   const isCharging = currentAmps > 1;
+  const isOnline = true; // simulated
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,13 +126,19 @@ export default function DeviceDetail() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8 space-y-8">
+        {/* Header with gear icon */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
             <Link to="/dashboard"><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">{device?.name}</h1>
-            <p className="text-sm text-muted-foreground">Firmware: {device?.firmware_type || "Unknown"}</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{device.name}</h1>
+              <ChargerSettingsDialog device={device} onUpdated={fetchDevice} />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {device.firmware_type || "Unknown firmware"}{device.url ? ` · ${device.url}` : ""}
+            </p>
           </div>
           <Badge className={isOnline ? "bg-primary text-primary-foreground" : "bg-destructive/15 text-destructive"}>
             {isOnline ? <><Wifi className="h-3 w-3 mr-1" /> Online</> : <><WifiOff className="h-3 w-3 mr-1" /> Offline</>}
@@ -200,14 +171,14 @@ export default function DeviceDetail() {
         {/* Quick controls */}
         <div className="flex gap-3">
           <Button className="active:scale-[0.97] transition-transform" onClick={async () => {
-            const { error } = await supabase.from("device_commands").insert({ device_id: device!.id, command: "start" });
+            const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "start" });
             if (error) toast.error(error.message);
             else toast.success("Start command queued — charger will pick it up on next poll");
           }}>
             <Play className="h-4 w-4 mr-1" /> Start charging
           </Button>
           <Button variant="destructive" className="active:scale-[0.97] transition-transform" onClick={async () => {
-            const { error } = await supabase.from("device_commands").insert({ device_id: device!.id, command: "stop" });
+            const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "stop" });
             if (error) toast.error(error.message);
             else toast.success("Stop command queued — charger will pick it up on next poll");
           }}>
@@ -251,9 +222,7 @@ export default function DeviceDetail() {
         {/* Schedules */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Charging schedules</CardTitle>
-            </div>
+            <CardTitle className="text-base">Charging schedules</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {schedules.map((schedule) => (
@@ -312,49 +281,6 @@ export default function DeviceDetail() {
               <Button size="sm" onClick={handleAddSchedule} disabled={addingSchedule || newDays.length === 0} className="active:scale-[0.97] transition-transform">
                 {addingSchedule ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
                 Add schedule
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Device settings */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Charger settings</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Name</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
-              </div>
-              <div className="space-y-2">
-                <Label>URL / IP</Label>
-                <Input value={url} onChange={(e) => setUrl(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>API key</Label>
-                <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" />
-              </div>
-              <div className="space-y-2">
-                <Label>Firmware</Label>
-                <Select value={firmwareType} onValueChange={setFirmwareType}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="openevse">OpenEVSE</SelectItem>
-                    <SelectItem value="ocpp">OCPP 1.6</SelectItem>
-                    <SelectItem value="wallbox">Wallbox</SelectItem>
-                    <SelectItem value="zappi">myenergi Zappi</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button onClick={handleSave} disabled={saving} className="active:scale-[0.97] transition-transform">
-                {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                Save changes
-              </Button>
-              <Button variant="destructive" onClick={handleDelete} className="active:scale-[0.97] transition-transform">
-                <Trash2 className="h-4 w-4 mr-1" /> Delete charger
               </Button>
             </div>
           </CardContent>
