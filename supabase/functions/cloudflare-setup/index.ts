@@ -249,7 +249,7 @@ async function handleWebSocket(request) {
         body: JSON.stringify({ updated_at: new Date().toISOString() }),
       });
 
-      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status', {
+      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status,default_amps', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
