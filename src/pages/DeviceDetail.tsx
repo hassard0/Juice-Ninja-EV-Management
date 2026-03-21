@@ -342,7 +342,7 @@ export default function DeviceDetail() {
             disabled={!isOnline || !isCharging}
             onClick={async () => {
               const lastSeenMs = new Date(device.updated_at).getTime();
-              if (Date.now() - lastSeenMs > 120000) {
+              if (Date.now() - lastSeenMs > 45000) {
                 toast.error("Charger is disconnected — reconnect it, then try Stop again");
                 return;
               }
