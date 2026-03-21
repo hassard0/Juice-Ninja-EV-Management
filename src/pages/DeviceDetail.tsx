@@ -12,7 +12,7 @@ import { BatteryCharging, ArrowLeft, Zap, Activity, Thermometer, Wifi, WifiOff, 
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LineChart, Line } from "recharts";
 import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
@@ -25,8 +25,7 @@ export default function DeviceDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [device, setDevice] = useState<Device | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [newStartTime, setNewStartTime] = useState("23:00");
@@ -36,17 +35,21 @@ export default function DeviceDetail() {
   // Chart date navigation — offset in days from today (0 = today, -1 = yesterday, etc.)
   const [chartDayOffset, setChartDayOffset] = useState(0);
 
-  const fetchDevice = useCallback(async () => {
-    if (!id) return;
-    const { data, error } = await supabase.from("devices").select("*").eq("id", id).single();
-    if (error || !data) {
-      toast.error("Charger not found");
-      navigate("/dashboard");
-      return;
-    }
-    setDevice(data);
-    setLoading(false);
-  }, [id, navigate]);
+  const { data: device, isLoading: loading } = useQuery<Device | null>({
+    queryKey: ["device", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data, error } = await supabase.from("devices").select("*").eq("id", id).single();
+      if (error || !data) {
+        toast.error("Charger not found");
+        navigate("/dashboard");
+        return null;
+      }
+      return data;
+    },
+    enabled: !!id,
+    refetchInterval: 15000,
+  });
 
   const fetchSchedules = useCallback(async () => {
     if (!id) return;
@@ -55,9 +58,8 @@ export default function DeviceDetail() {
   }, [id]);
 
   useEffect(() => {
-    fetchDevice();
     fetchSchedules();
-  }, [fetchDevice, fetchSchedules]);
+  }, [fetchSchedules]);
 
   // Compute chart date range based on offset
   const chartRange = useMemo(() => {
@@ -195,7 +197,7 @@ export default function DeviceDetail() {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">{device.name}</h1>
-              <ChargerSettingsDialog device={device} onUpdated={fetchDevice} />
+              <ChargerSettingsDialog device={device} onUpdated={() => queryClient.invalidateQueries({ queryKey: ["device", id] })} />
             </div>
             <p className="text-sm text-muted-foreground">
               {device.firmware_type || "Unknown firmware"}{device.url ? ` · ${device.url}` : ""}
