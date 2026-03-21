@@ -173,6 +173,11 @@ export default function Dashboard() {
             Juice Ninja
           </Link>
           <div className="flex items-center gap-3">
+            {isAdmin && (
+              <Button variant="ghost" size="icon" asChild title="Admin">
+                <Link to="/admin"><ShieldCheck className="h-4 w-4" /></Link>
+              </Button>
+            )}
             <Button variant="ghost" size="icon" asChild title="Settings">
               <Link to="/settings"><Settings className="h-4 w-4" /></Link>
             </Button>
