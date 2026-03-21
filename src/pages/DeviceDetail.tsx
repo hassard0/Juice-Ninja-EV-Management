@@ -248,17 +248,12 @@ export default function DeviceDetail() {
   const currentVoltage = latest?.voltage ?? 0;
   const currentTemp = latest?.temperature ?? null;
   const latestTeleAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
-  const chargingStatus = (device as any)?.charging_status as string | undefined;
-  // Charger is "charging" if OCPP reports it OR if fresh telemetry shows current draw
-  // Button/status logic should follow live current first, then OCPP fallback when telemetry is stale
-  const ocppSaysCharging = chargingStatus === 'charging' || chargingStatus === 'suspended';
-  const hasFreshTelemetry = latestTeleAge < 60_000;
+  // Control gating should follow fresh measured current to avoid stale/ghost charging states
+  const CONTROL_TELEMETRY_FRESH_MS = 3 * 60 * 1000;
+  const hasFreshTelemetry = latestTeleAge < CONTROL_TELEMETRY_FRESH_MS;
   const hasLiveCurrent = hasFreshTelemetry && currentAmps > 1;
-  const hasActiveTransaction = Boolean((device as any)?.active_transaction_id);
-
-  // If we have fresh telemetry with 0A, treat as idle even if status briefly says "charging"
-  const isCharging = hasLiveCurrent || (ocppSaysCharging && hasActiveTransaction && !hasFreshTelemetry);
-  const displayCharging = isCharging;
+  const isCharging = hasLiveCurrent;
+  const displayCharging = hasLiveCurrent;
   const isOnline = isDeviceOnline(device);
 
   // Can go back up to 365 days
