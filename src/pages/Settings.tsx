@@ -36,12 +36,13 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [currency, setCurrency] = useState("GBP");
-  const [timeFormat, setTimeFormat] = useState("24h");
+  const [timeFormat, setTimeFormat] = useState<"24h" | "12h">("24h");
   const [addingTariff, setAddingTariff] = useState(false);
   const [newName, setNewName] = useState("");
   const [newStart, setNewStart] = useState("00:00");
   const [newEnd, setNewEnd] = useState("07:00");
   const [newCost, setNewCost] = useState("0.10");
+  const timeInputLang = timeFormat === "12h" ? "en-US" : "en-GB";
 
   useEffect(() => {
     if (!user) return;
