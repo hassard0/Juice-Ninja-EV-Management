@@ -377,10 +377,18 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
       break;
     }
 
-    case 'MeterValues':
+    case 'MeterValues': {
       // Extract telemetry from OCPP MeterValues
       const telemetry = { device_id: deviceId };
       const sampledValues = payload.meterValue?.[0]?.sampledValue || [];
+      let seenTxId = null;
+      if (payload && payload.transactionId != null) {
+        const parsedTxId = Number(payload.transactionId);
+        if (Number.isFinite(parsedTxId) && parsedTxId > 0) {
+          seenTxId = Math.trunc(parsedTxId);
+        }
+      }
+
       for (const sv of sampledValues) {
         const val = parseFloat(sv.value);
         if (sv.measurand === 'Current.Import') telemetry.amps = val;
@@ -401,8 +409,24 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
         body: JSON.stringify(telemetry),
       });
 
+      // Persist active transaction ID seen in meter stream (important after reconnects)
+      if (seenTxId) {
+        activeTransactions[deviceId] = seenTxId;
+        await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SERVICE_KEY,
+            'Authorization': 'Bearer ' + SERVICE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({ active_transaction_id: seenTxId, charging_status: 'charging', vehicle_connected: true }),
+        });
+      }
+
       server.send(JSON.stringify([3, uniqueId, {}]));
       break;
+    }
 
     case 'StartTransaction': {
       const txId = Date.now();
@@ -431,7 +455,7 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal',
         },
-        body: JSON.stringify({ active_transaction_id: null, charging_status: 'idle' }),
+        body: JSON.stringify({ active_transaction_id: null, charging_status: 'idle', vehicle_connected: false }),
       });
       server.send(JSON.stringify([3, uniqueId, { idTagInfo: { status: 'Accepted' } }]));
       break;
