@@ -246,6 +246,16 @@ async function handleWebSocket(request) {
     }
   });
 
+  // WebSocket-level ping every 20s to prevent Cloudflare idle timeout (which kills at ~100s idle)
+  const pingInterval = setInterval(() => {
+    try {
+      // OCPP Heartbeat as application-level ping — charger MUST respond, keeping the socket alive
+      server.send(JSON.stringify([2, 'ping-' + Date.now(), 'TriggerMessage', { requestedMessage: 'Heartbeat' }]));
+    } catch (_) {
+      // Socket dead — disconnect handler will clean up
+    }
+  }, 20_000);
+
   // Poll for pending commands every 5 seconds.
   const commandPollInterval = setInterval(async () => {
     try {
@@ -253,13 +263,24 @@ async function handleWebSocket(request) {
 
       // If charger went silent while socket is still open, force reconnect to recover.
       if (now - lastRxAt > SOCKET_STALE_RECONNECT_MS) {
+        console.log('Stale socket for ' + resolvedDeviceId + ' — closing to force reconnect');
         try {
           server.close(1012, 'upstream_stale');
         } catch (_) {}
         return;
       }
 
-      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status,default_amps', {
+      // Update device timestamp on every poll cycle to keep it "online"
+      await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': 'Bearer ' + SERVICE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ updated_at: new Date().toISOString() }),
+      });
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
