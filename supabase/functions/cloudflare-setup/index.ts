@@ -492,8 +492,9 @@ async function patchCommand(cmdId, status, result = null) {
   });
 }
 
-// STOP ESCALATION: fire RemoteStopTransaction, then 0A profile, then Soft Reset
-// in rapid succession (1s apart). At least one should stick.
+// STOP ESCALATION: fire RemoteStopTransaction, then 0A profile.
+// NOTE: do NOT send Reset here — resetting the charger on normal stop causes
+// unnecessary websocket drops and false offline states.
 async function handleStopEscalation(server, cmd, persistedTransactionId, outboundCommands) {
   const methods = [];
   const txId = normalizeTransactionId(cmd.payload?.transactionId)
@@ -526,13 +527,6 @@ async function handleStopEscalation(server, cmd, persistedTransactionId, outboun
       },
     }],
     label: 'SetChargingProfile(0A)',
-  });
-
-  // Method 3: Soft Reset
-  methods.push({
-    uid: 'stop3-' + cmd.id.substring(0, 6),
-    msg: [2, 'stop3-' + cmd.id.substring(0, 6), 'Reset', { type: 'Soft' }],
-    label: 'Reset(Soft)',
   });
 
   // Mark command as acknowledged
