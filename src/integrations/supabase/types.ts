@@ -162,6 +162,42 @@ export type Database = {
           },
         ]
       }
+      tariff_rates: {
+        Row: {
+          cost_per_kwh: number
+          created_at: string
+          end_time: string
+          id: string
+          is_default: boolean
+          name: string
+          start_time: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cost_per_kwh?: number
+          created_at?: string
+          end_time: string
+          id?: string
+          is_default?: boolean
+          name: string
+          start_time: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cost_per_kwh?: number
+          created_at?: string
+          end_time?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          start_time?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       telemetry: {
         Row: {
           amps: number | null
@@ -199,6 +235,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_settings: {
+        Row: {
+          created_at: string
+          currency: string
+          currency_symbol: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          currency_symbol?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          currency_symbol?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
