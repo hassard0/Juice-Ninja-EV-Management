@@ -60,6 +60,7 @@ export type Database = {
       }
       devices: {
         Row: {
+          active_transaction_id: number | null
           api_key: string | null
           auto_start: boolean
           charging_status: string
@@ -77,6 +78,7 @@ export type Database = {
           vehicle_connected: boolean
         }
         Insert: {
+          active_transaction_id?: number | null
           api_key?: string | null
           auto_start?: boolean
           charging_status?: string
@@ -94,6 +96,7 @@ export type Database = {
           vehicle_connected?: boolean
         }
         Update: {
+          active_transaction_id?: number | null
           api_key?: string | null
           auto_start?: boolean
           charging_status?: string
