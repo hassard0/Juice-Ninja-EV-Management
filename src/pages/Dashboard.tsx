@@ -1,31 +1,74 @@
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BatteryCharging, Zap, Activity, Thermometer, LogOut, Plus, Play, Square, Clock, BarChart3 } from "lucide-react";
-import { mockDevices, mockSessions, mockEnergyData, type MockDevice } from "@/lib/mock-data";
+import { BatteryCharging, Zap, Activity, Thermometer, LogOut, Play, Square, Clock, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import AddChargerDialog from "@/components/AddChargerDialog";
+import type { Database } from "@/integrations/supabase/types";
 
-const statusColor: Record<MockDevice["status"], string> = {
+type Device = Database["public"]["Tables"]["devices"]["Row"];
+
+const statusForDevice = (device: Device): "charging" | "idle" | "offline" | "scheduled" => {
+  // Simulated status — in production this would come from telemetry
+  const hash = device.id.charCodeAt(0) % 4;
+  return (["charging", "idle", "scheduled", "idle"] as const)[hash];
+};
+
+const statusColor: Record<string, string> = {
   charging: "bg-primary text-primary-foreground",
   idle: "bg-muted text-muted-foreground",
   offline: "bg-destructive/15 text-destructive",
   scheduled: "bg-accent text-accent-foreground",
 };
 
+// Mock telemetry per device (demo)
+const mockTelemetry = (device: Device) => {
+  const seed = device.id.charCodeAt(2);
+  const status = statusForDevice(device);
+  return {
+    amps: status === "charging" ? 8 + (seed % 24) : 0,
+    voltage: 230 + (seed % 15),
+    power_kw: status === "charging" ? ((8 + (seed % 24)) * (230 + (seed % 15))) / 1000 : 0,
+    session_kwh: status === "charging" ? 2 + (seed % 30) : 0,
+    temperature: 18 + (seed % 20),
+  };
+};
+
+const mockEnergyData = [
+  { day: "Mon", kwh: 28.4 },
+  { day: "Tue", kwh: 34.1 },
+  { day: "Wed", kwh: 19.7 },
+  { day: "Thu", kwh: 42.3 },
+  { day: "Fri", kwh: 37.9 },
+  { day: "Sat", kwh: 15.2 },
+  { day: "Sun", kwh: 22.8 },
+];
+
 export default function Dashboard() {
   const { user, signOut } = useAuth();
-  const [devices] = useState(mockDevices);
 
-  const activeCount = devices.filter((d) => d.status === "charging").length;
-  const totalKwhToday = mockSessions.reduce((sum, s) => sum + s.energy_kwh, 0);
-  const totalCostToday = mockSessions.reduce((sum, s) => sum + s.cost, 0);
+  const { data: devices = [], refetch } = useQuery({
+    queryKey: ["devices"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("devices").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Device[];
+    },
+  });
 
-  const handleStartStop = (device: MockDevice) => {
-    if (device.status === "charging") {
+  const activeCount = devices.filter((d) => statusForDevice(d) === "charging").length;
+  const totalKwhToday = devices.reduce((sum, d) => sum + mockTelemetry(d).session_kwh, 0);
+  const totalCostToday = totalKwhToday * 0.25;
+
+  const handleStartStop = (device: Device) => {
+    const status = statusForDevice(device);
+    if (status === "charging") {
       toast.success(`Stopped charging on ${device.name}`);
     } else {
       toast.success(`Started charging on ${device.name}`);
@@ -34,7 +77,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link to="/dashboard" className="flex items-center gap-2 text-primary font-bold text-xl tracking-tight">
@@ -103,56 +145,72 @@ export default function Dashboard() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">Your chargers</h2>
-            <Button size="sm" variant="outline" className="active:scale-[0.97] transition-transform">
-              <Plus className="h-4 w-4 mr-1" /> Add charger
-            </Button>
+            <AddChargerDialog onAdded={() => refetch()} />
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {devices.map((device) => (
-              <Card key={device.id} className="hover:shadow-md transition-shadow duration-300">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{device.name}</CardTitle>
-                    <Badge className={`${statusColor[device.status]} text-xs capitalize`}>{device.status}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Firmware {device.firmware}</p>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Zap className="h-3.5 w-3.5" />
-                      <span className="tabular-nums">{device.power_kw.toFixed(2)} kW</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Activity className="h-3.5 w-3.5" />
-                      <span className="tabular-nums">{device.amps.toFixed(1)} A</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Thermometer className="h-3.5 w-3.5" />
-                      <span className="tabular-nums">{device.temperature}°C</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <BatteryCharging className="h-3.5 w-3.5" />
-                      <span className="tabular-nums">{device.session_kwh.toFixed(1)} kWh</span>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant={device.status === "charging" ? "destructive" : "default"}
-                    className="w-full active:scale-[0.97] transition-transform"
-                    onClick={() => handleStartStop(device)}
-                    disabled={device.status === "offline"}
-                  >
-                    {device.status === "charging" ? (
-                      <><Square className="h-3.5 w-3.5 mr-1" /> Stop</>
-                    ) : (
-                      <><Play className="h-3.5 w-3.5 mr-1" /> Start</>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+
+          {devices.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <BatteryCharging className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
+                <h3 className="text-lg font-semibold mb-1">No chargers yet</h3>
+                <p className="text-sm text-muted-foreground mb-4">Register your first EV charger to start monitoring and controlling it.</p>
+                <AddChargerDialog onAdded={() => refetch()} />
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {devices.map((device) => {
+                const status = statusForDevice(device);
+                const tele = mockTelemetry(device);
+                return (
+                  <Link to={`/device/${device.id}`} key={device.id} className="block">
+                    <Card className="hover:shadow-md transition-shadow duration-300 h-full">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base">{device.name}</CardTitle>
+                          <Badge className={`${statusColor[status]} text-xs capitalize`}>{status}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Firmware {device.firmware_type || "—"}</p>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Zap className="h-3.5 w-3.5" />
+                            <span className="tabular-nums">{tele.power_kw.toFixed(2)} kW</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Activity className="h-3.5 w-3.5" />
+                            <span className="tabular-nums">{tele.amps.toFixed(1)} A</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Thermometer className="h-3.5 w-3.5" />
+                            <span className="tabular-nums">{tele.temperature}°C</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <BatteryCharging className="h-3.5 w-3.5" />
+                            <span className="tabular-nums">{tele.session_kwh.toFixed(1)} kWh</span>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={status === "charging" ? "destructive" : "default"}
+                          className="w-full active:scale-[0.97] transition-transform"
+                          onClick={(e) => { e.preventDefault(); handleStartStop(device); }}
+                          disabled={status === "offline"}
+                        >
+                          {status === "charging" ? (
+                            <><Square className="h-3.5 w-3.5 mr-1" /> Stop</>
+                          ) : (
+                            <><Play className="h-3.5 w-3.5 mr-1" /> Start</>
+                          )}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* Weekly energy chart */}
@@ -177,53 +235,6 @@ export default function Dashboard() {
                   <Bar dataKey="kwh" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Recent sessions */}
-        <section>
-          <h2 className="text-xl font-semibold mb-4">Recent sessions</h2>
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left">
-                      <th className="p-4 font-medium text-muted-foreground">Charger</th>
-                      <th className="p-4 font-medium text-muted-foreground">Started</th>
-                      <th className="p-4 font-medium text-muted-foreground">Duration</th>
-                      <th className="p-4 font-medium text-muted-foreground text-right">Energy</th>
-                      <th className="p-4 font-medium text-muted-foreground text-right">Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mockSessions.map((session) => {
-                      const start = new Date(session.start);
-                      const end = session.end ? new Date(session.end) : null;
-                      const durationMs = end ? end.getTime() - start.getTime() : Date.now() - start.getTime();
-                      const hours = Math.floor(durationMs / 3600000);
-                      const mins = Math.floor((durationMs % 3600000) / 60000);
-                      return (
-                        <tr key={session.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                          <td className="p-4 font-medium">{session.device_name}</td>
-                          <td className="p-4 text-muted-foreground">
-                            <div className="flex items-center gap-1.5">
-                              <Clock className="h-3.5 w-3.5" />
-                              {start.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, {start.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                            </div>
-                          </td>
-                          <td className="p-4 text-muted-foreground tabular-nums">
-                            {end ? `${hours}h ${mins}m` : <Badge variant="outline" className="text-xs">Active</Badge>}
-                          </td>
-                          <td className="p-4 text-right tabular-nums font-medium">{session.energy_kwh.toFixed(1)} kWh</td>
-                          <td className="p-4 text-right tabular-nums font-medium">£{session.cost.toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
             </CardContent>
           </Card>
         </section>
