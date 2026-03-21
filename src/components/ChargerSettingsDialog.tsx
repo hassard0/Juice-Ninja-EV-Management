@@ -493,19 +493,55 @@ Content-Type: application/json
                 <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Garage, Bay 3" maxLength={100} />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Firmware / protocol</Label>
-              <Select value={firmwareType} onValueChange={setFirmwareType}>
-                <SelectTrigger className="sm:w-1/2">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {FIRMWARE_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Firmware / protocol</Label>
+                <Select value={firmwareType} onValueChange={setFirmwareType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FIRMWARE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Timezone</Label>
+                <Select value={timezone} onValueChange={setTimezone}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select timezone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONE_OPTIONS.map((tz) => (
+                      <SelectItem key={tz} value={tz}>{tz.replace(/_/g, " ")}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-medium">Charging defaults</p>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Default amps</Label>
+                  <Input type="number" min={6} max={80} value={defaultAmps} onChange={(e) => setDefaultAmps(parseInt(e.target.value) || 32)} />
+                  <p className="text-xs text-muted-foreground">Charging current limit when a session starts</p>
+                </div>
+                <div className="space-y-2 flex flex-col justify-center">
+                  <div className="flex items-center gap-3">
+                    <Switch checked={autoStart} onCheckedChange={setAutoStart} />
+                    <div>
+                      <Label>Auto-start charging</Label>
+                      <p className="text-xs text-muted-foreground">Automatically start when a vehicle is plugged in</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <Button onClick={handleSave} disabled={saving} className="active:scale-[0.97] transition-transform">
               {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
               Save changes
