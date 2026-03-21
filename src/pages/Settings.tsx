@@ -35,6 +35,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [currency, setCurrency] = useState("GBP");
+  const [timeFormat, setTimeFormat] = useState("24h");
   const [addingTariff, setAddingTariff] = useState(false);
   const [newName, setNewName] = useState("");
   const [newStart, setNewStart] = useState("00:00");
