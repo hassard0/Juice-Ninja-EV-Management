@@ -47,29 +47,41 @@ function getFirmwareGuide(firmware: string | null, webhookUrl: string, commandsU
   switch (firmware) {
     case "openevse":
       return {
-        title: "OpenEVSE WiFi Module",
-        description: "OpenEVSE uses MQTT or HTTP POST for telemetry. You can configure it via the charger's built-in web UI.",
+        title: "OpenEVSE WiFi Module (ESP32)",
+        description: "OpenEVSE has a built-in Emoncms data logging service that can POST charger status to a remote server. Juice Ninja can receive this data by acting as your Emoncms endpoint.",
         steps: [
           {
-            where: "WiFi Web UI → Services → HTTP",
+            where: "WiFi Web UI → Services → Emoncms",
             instructions: [
-              "Connect to your OpenEVSE WiFi module's web interface (usually http://openevse.local or the IP address shown on the charger's LCD).",
-              "Navigate to Services in the left menu.",
-              "Under HTTP, enable the HTTP service.",
-              `Set the URL to: ${webhookUrl}`,
-              `Add custom headers:\n  x-device-id: ${deviceId}\n  x-api-key: ${apiKey}`,
-              "Set the update interval (recommended: 30 seconds).",
-              "Click Save. The module will begin POSTing status data to Juice Ninja.",
+              "Connect to your OpenEVSE WiFi module's web interface (usually http://openevse.local or the charger's IP address).",
+              "Navigate to the Services page.",
+              "Under Emoncms Data Logging, enable the service.",
+              `Set the Emoncms server URL to:\n  ${webhookUrl}`,
+              `Set the Emoncms API key (node field) to:\n  ${apiKey}`,
+              `Set the Emoncms Node name to your Device ID:\n  ${deviceId}`,
+              "The OpenEVSE will POST status data (amps, voltage, temperature, energy) every 30 seconds.",
+              "You can toggle between HTTP and HTTPS — use HTTPS for secure transmission.",
             ],
           },
           {
             where: "WiFi Web UI → Services → MQTT (alternative)",
             instructions: [
-              "If you prefer MQTT, you can configure an MQTT-to-HTTP bridge on your network.",
+              "If you use an MQTT broker (e.g. Mosquitto on a Raspberry Pi), you can bridge MQTT data to Juice Ninja instead.",
               "Navigate to Services → MQTT in the OpenEVSE web UI.",
               "Enter your MQTT broker details (host, port, username, password).",
-              "Set a topic prefix (e.g. openevse/telemetry).",
-              "Then configure a bridge service to forward MQTT messages to the Juice Ninja webhook.",
+              `Set the base topic (e.g. openevse).`,
+              "OpenEVSE will publish status data to topics like openevse/amp, openevse/voltage, openevse/temp, openevse/wh.",
+              "You'll need a small bridge script on your broker to forward these to the Juice Ninja telemetry webhook.",
+            ],
+          },
+          {
+            where: "WiFi Web UI → Charger controls via HTTP API",
+            instructions: [
+              "OpenEVSE exposes a local HTTP API for control. Juice Ninja can send commands to it if your charger is on the same network.",
+              "Start/stop charging: POST to http://{openevse_ip}/claims/client/65537 with JSON body {\"state\": \"active\"} or {\"state\": \"disabled\"}.",
+              "Set current: POST to http://{openevse_ip}/claims/client/65537 with JSON body {\"state\": \"active\", \"charge_current\": 16}.",
+              "Get live status: GET http://{openevse_ip}/status returns JSON with amp, voltage, temp1, watthour, etc.",
+              "If HTTP Authentication is enabled on the OpenEVSE (recommended), include Basic Auth credentials with each request.",
             ],
           },
         ],
