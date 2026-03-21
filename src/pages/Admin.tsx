@@ -153,7 +153,7 @@ export default function Admin() {
           <CardHeader>
             <CardTitle className="text-base">Registered Users</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
