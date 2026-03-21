@@ -395,6 +395,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "fix_ssl") {
+      // Check current SSL setting
+      const sslData = await cfFetch(`/zones/${zoneId}/settings/ssl`, token);
+      results.current_ssl = sslData.result?.value;
+
+      // Set SSL to "flexible" so Cloudflare terminates SSL for clients
+      const setSsl = await cfFetch(`/zones/${zoneId}/settings/ssl`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ value: "flexible" }),
+      });
+      results.ssl_set = setSsl.success ? "flexible" : setSsl.errors;
+
+      // Also enable Universal SSL
+      const univSsl = await cfFetch(`/zones/${zoneId}/ssl/universal/settings`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: true }),
+      });
+      results.universal_ssl = univSsl.success ? "enabled" : univSsl.errors;
+
+      return new Response(JSON.stringify({ ok: true, results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
