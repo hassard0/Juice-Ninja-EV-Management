@@ -14,7 +14,192 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      devices: {
+        Row: {
+          api_key: string | null
+          created_at: string
+          firmware_type: string | null
+          id: string
+          name: string
+          tenant_id: number
+          updated_at: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          api_key?: string | null
+          created_at?: string
+          firmware_type?: string | null
+          id?: string
+          name: string
+          tenant_id?: number
+          updated_at?: string
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          api_key?: string | null
+          created_at?: string
+          firmware_type?: string | null
+          id?: string
+          name?: string
+          tenant_id?: number
+          updated_at?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          tenant_id: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          tenant_id?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          tenant_id?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      schedules: {
+        Row: {
+          created_at: string
+          days_of_week: number[]
+          device_id: string
+          enabled: boolean
+          end_time: string
+          id: string
+          start_time: string
+          tenant_id: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days_of_week?: number[]
+          device_id: string
+          enabled?: boolean
+          end_time: string
+          id?: string
+          start_time: string
+          tenant_id?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days_of_week?: number[]
+          device_id?: string
+          enabled?: boolean
+          end_time?: string
+          id?: string
+          start_time?: string
+          tenant_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          cost: number | null
+          device_id: string
+          ended_at: string | null
+          energy_kwh: number | null
+          id: string
+          started_at: string
+          tenant_id: number
+        }
+        Insert: {
+          cost?: number | null
+          device_id: string
+          ended_at?: string | null
+          energy_kwh?: number | null
+          id?: string
+          started_at?: string
+          tenant_id?: number
+        }
+        Update: {
+          cost?: number | null
+          device_id?: string
+          ended_at?: string | null
+          energy_kwh?: number | null
+          id?: string
+          started_at?: string
+          tenant_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telemetry: {
+        Row: {
+          amps: number | null
+          device_id: string
+          id: string
+          recorded_at: string
+          temperature: number | null
+          voltage: number | null
+          wh: number | null
+        }
+        Insert: {
+          amps?: number | null
+          device_id: string
+          id?: string
+          recorded_at?: string
+          temperature?: number | null
+          voltage?: number | null
+          wh?: number | null
+        }
+        Update: {
+          amps?: number | null
+          device_id?: string
+          id?: string
+          recorded_at?: string
+          temperature?: number | null
+          voltage?: number | null
+          wh?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telemetry_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
