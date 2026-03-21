@@ -17,7 +17,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Toolti
 import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
-import { isDeviceOnline, TELEMETRY_FRESH_MS } from "@/lib/device-status";
+import { isDeviceOnline } from "@/lib/device-status";
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
 type Schedule = Database["public"]["Tables"]["schedules"]["Row"];
