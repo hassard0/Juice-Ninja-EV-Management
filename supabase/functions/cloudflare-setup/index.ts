@@ -331,7 +331,7 @@ Deno.serve(async (req) => {
 
       const ocppWorkerRes = await fetch(`${CF_API}/accounts/${accountId}/workers/scripts/juice-ninja-ocpp-bridge`, {
         method: "PUT",
-        headers: { "Authorization": `Bearer ${token}` },
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/javascript" },
         body: ocppScript,
       });
       const ocppWorkerData = await ocppWorkerRes.json();
