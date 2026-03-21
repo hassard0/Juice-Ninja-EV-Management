@@ -104,6 +104,25 @@ export default function DeviceDetail() {
     refetchInterval: chartDayOffset === 0 ? 30000 : false,
   });
 
+  // Latest telemetry is independent from chart day and drives live controls/status
+  const { data: latestTelemetry } = useQuery<Telemetry | null>({
+    queryKey: ["telemetry_device_latest", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data, error } = await supabase
+        .from("telemetry")
+        .select("*")
+        .eq("device_id", id)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+    refetchInterval: 10000,
+  });
+
   // Group telemetry by hour for charts
   const telemetryByHour = useMemo(() => {
     if (rawTelemetry.length === 0) return [];
