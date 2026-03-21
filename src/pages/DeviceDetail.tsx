@@ -267,13 +267,14 @@ export default function DeviceDetail() {
   const currentVoltage = latest?.voltage ?? 0;
   const currentTemp = latest?.temperature ?? null;
   const latestTeleAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
-  // Control gating should follow fresh measured current to avoid stale/ghost charging states
+  // Control gating should follow fresh measured current + very fresh device heartbeat
   const CONTROL_TELEMETRY_FRESH_MS = 3 * 60 * 1000;
+  const COMMAND_CHANNEL_FRESH_MS = 90 * 1000;
   const hasFreshTelemetry = latestTeleAge < CONTROL_TELEMETRY_FRESH_MS;
   const hasLiveCurrent = hasFreshTelemetry && currentAmps > 1;
   const isCharging = hasLiveCurrent;
   const displayCharging = hasLiveCurrent;
-  const isOnline = isDeviceOnline(device);
+  const isOnline = Date.now() - new Date(device.updated_at).getTime() < COMMAND_CHANNEL_FRESH_MS;
 
   // Can go back up to 365 days
   const canGoBack = chartDayOffset > -365;
