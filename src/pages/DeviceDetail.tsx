@@ -195,27 +195,29 @@ export default function DeviceDetail() {
 
       <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Header with gear icon */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/dashboard"><ArrowLeft className="h-5 w-5" /></Link>
-          </Button>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{device.name}</h1>
-              <ChargerSettingsDialog device={device} onUpdated={() => queryClient.invalidateQueries({ queryKey: ["device", id] })} />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <Button variant="ghost" size="icon" asChild className="shrink-0">
+              <Link to="/dashboard"><ArrowLeft className="h-5 w-5" /></Link>
+            </Button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold truncate">{device.name}</h1>
+                <ChargerSettingsDialog device={device} onUpdated={() => queryClient.invalidateQueries({ queryKey: ["device", id] })} />
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                {device.firmware_type || "Unknown firmware"}{device.url ? ` · ${device.url}` : ""}
+                {(device as any).timezone ? ` · ${(device as any).timezone.replace(/_/g, " ")}` : ""}
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {device.firmware_type || "Unknown firmware"}{device.url ? ` · ${device.url}` : ""}
-              {(device as any).timezone ? ` · ${(device as any).timezone.replace(/_/g, " ")}` : ""}
-            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-11 sm:ml-0">
             {vehicleConnected && (
-              <Badge className="bg-primary/10 text-primary">
-                <Car className="h-3 w-3 mr-1" /> Vehicle connected
+              <Badge className="bg-primary/10 text-primary text-xs">
+                <Car className="h-3 w-3 mr-1" /> Connected
               </Badge>
             )}
-            <Badge className={isOnline ? "bg-primary text-primary-foreground" : "bg-destructive/15 text-destructive"}>
+            <Badge className={`text-xs ${isOnline ? "bg-primary text-primary-foreground" : "bg-destructive/15 text-destructive"}`}>
               {isOnline ? <><Wifi className="h-3 w-3 mr-1" /> Online</> : <><WifiOff className="h-3 w-3 mr-1" /> Offline</>}
             </Badge>
           </div>
