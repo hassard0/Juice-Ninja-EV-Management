@@ -348,7 +348,7 @@ export default function DeviceDetail() {
                 <div className="flex items-center gap-3">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="font-medium tabular-nums">{schedule.start_time.slice(0, 5)} — {schedule.end_time.slice(0, 5)}</p>
+                    <p className="font-medium tabular-nums">{formatTime(schedule.start_time, timeFormat)} — {formatTime(schedule.end_time, timeFormat)}</p>
                     <p className="text-xs text-muted-foreground">{schedule.days_of_week.map((d) => DAYS[d - 1]).join(", ")}</p>
                   </div>
                 </div>
