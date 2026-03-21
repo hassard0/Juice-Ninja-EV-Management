@@ -356,7 +356,7 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Wifi className="h-3.5 w-3.5" /> Device ID
+                  <Wifi className="h-3.5 w-3.5" /> Device ID / Charge Point ID
                 </Label>
                 <div className="flex gap-2">
                   <code className="flex-1 rounded-md border bg-background px-3 py-2 text-sm font-mono break-all select-all">{device.id}</code>
@@ -366,7 +366,7 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <KeyRound className="h-3.5 w-3.5" /> API Key
+                  <KeyRound className="h-3.5 w-3.5" /> API Key / CSMS Password
                 </Label>
                 <div className="flex gap-2">
                   <code className="flex-1 rounded-md border bg-background px-3 py-2 text-sm font-mono break-all select-all">
@@ -380,21 +380,36 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
                 </Button>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Telemetry endpoint</Label>
-                <div className="flex gap-2">
-                  <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">{webhookUrl}</code>
-                  <CopyButton text={webhookUrl} field="webhook" />
+              {isOcppFirmware ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">OCPP WebSocket URL (single connection)</Label>
+                  <p className="text-xs text-muted-foreground">Telemetry and control share the same WebSocket connection.</p>
+                  <div className="flex gap-2">
+                    <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">
+                      {`ws://${webhookUrl.replace(/^https?:\/\//, "")}/${device.id}`}
+                    </code>
+                    <CopyButton text={`ws://${webhookUrl.replace(/^https?:\/\//, "")}/${device.id}`} field="ocpp-ws" />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Telemetry endpoint</Label>
+                    <div className="flex gap-2">
+                      <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">{webhookUrl}</code>
+                      <CopyButton text={webhookUrl} field="webhook" />
+                    </div>
+                  </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Commands endpoint</Label>
-                <div className="flex gap-2">
-                  <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">{commandsUrl}</code>
-                  <CopyButton text={commandsUrl} field="commands" />
-                </div>
-              </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Commands endpoint</Label>
+                    <div className="flex gap-2">
+                      <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">{commandsUrl}</code>
+                      <CopyButton text={commandsUrl} field="commands" />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </TabsContent>
 
