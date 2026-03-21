@@ -155,22 +155,45 @@ export default function DeviceDetail() {
 
   // Latest telemetry values and session energy (delta between first and last wh reading of the day)
   const latest = rawTelemetry.length > 0 && chartDayOffset === 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
-  const sessionEnergyWh = useMemo(() => {
+  const meterEnergyWh = useMemo(() => {
     const whValues = rawTelemetry.filter((t) => t.wh != null).map((t) => t.wh!);
     if (whValues.length < 2) return 0;
-    // Find the start of the current contiguous session — a large jump in the
-    // cumulative meter means the charger reconnected or meter was reset.
     let baseline = whValues[0];
     for (let i = 1; i < whValues.length; i++) {
       const jump = Math.abs(whValues[i] - whValues[i - 1]);
-      // If the reading jumps by more than 100 kWh (100000 Wh) treat it as a
-      // meter baseline change (different session / reconnect with lifetime meter)
       if (jump > 100000) {
         baseline = whValues[i];
       }
     }
     return Math.max(0, whValues[whValues.length - 1] - baseline);
   }, [rawTelemetry]);
+
+  // Real-time energy extrapolation: if the charger is still drawing power,
+  // estimate energy accumulated since last telemetry reading
+  const [extrapolatedWh, setExtrapolatedWh] = useState(0);
+  useEffect(() => {
+    if (!latest || !device) { setExtrapolatedWh(0); return; }
+    const chargingStatus = (device as any)?.charging_status;
+    const isActivelyCharging = (latest.amps != null && latest.amps > 1) ||
+      chargingStatus === 'charging';
+    if (!isActivelyCharging) { setExtrapolatedWh(0); return; }
+
+    const lastTime = new Date(latest.recorded_at).getTime();
+    const watts = (latest.amps || 0) * (latest.voltage || 240);
+
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - lastTime) / 3600000; // hours
+      setExtrapolatedWh(watts * elapsed);
+    }, 1000);
+
+    // Compute immediately
+    const elapsed = (Date.now() - lastTime) / 3600000;
+    setExtrapolatedWh(watts * elapsed);
+
+    return () => clearInterval(interval);
+  }, [latest, device]);
+
+  const sessionEnergyWh = meterEnergyWh + extrapolatedWh;
 
   const vehicleConnected = (device as any)?.vehicle_connected ?? false;
 
