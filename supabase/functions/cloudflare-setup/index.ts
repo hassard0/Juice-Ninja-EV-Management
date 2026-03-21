@@ -263,7 +263,7 @@ async function handleWebSocket(request) {
 
       // If charger went silent while socket is still open, force reconnect to recover.
       if (now - lastRxAt > SOCKET_STALE_RECONNECT_MS) {
-        console.log('Stale socket for ' + resolvedDeviceId + ' — closing to force reconnect');
+        console.log('Stale socket for ' + resolvedDeviceId + ' - closing to force reconnect');
         try {
           server.close(1012, 'upstream_stale');
         } catch (_) {}
