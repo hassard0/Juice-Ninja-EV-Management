@@ -159,7 +159,14 @@ export default function Dashboard() {
         .filter((t) => t.device_id === device.id && t.wh != null)
         .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
       if (readings.length >= 2) {
-        map[device.id] = Math.max(0, (readings[readings.length - 1].wh! - readings[0].wh!)) / 1000;
+        // Use contiguous readings — detect large jumps (meter baseline changes)
+        let baseline = readings[0].wh!;
+        for (let i = 1; i < readings.length; i++) {
+          if (Math.abs(readings[i].wh! - readings[i - 1].wh!) > 100000) {
+            baseline = readings[i].wh!;
+          }
+        }
+        map[device.id] = Math.max(0, (readings[readings.length - 1].wh! - baseline)) / 1000;
       } else {
         map[device.id] = 0;
       }
