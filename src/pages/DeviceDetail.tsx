@@ -130,7 +130,6 @@ export default function DeviceDetail() {
 
   // Latest telemetry values (always from today's data or latest available)
   const latest = rawTelemetry.length > 0 && chartDayOffset === 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
-  const latestAge = device ? Date.now() - new Date(device.updated_at).getTime() : Infinity;
 
   const vehicleConnected = (device as any)?.vehicle_connected ?? false;
 
