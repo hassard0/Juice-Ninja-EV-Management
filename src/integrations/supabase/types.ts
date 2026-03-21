@@ -66,6 +66,7 @@ export type Database = {
           default_amps: number
           firmware_type: string | null
           id: string
+          max_amps: number
           name: string
           tenant_id: number
           timezone: string
@@ -81,6 +82,7 @@ export type Database = {
           default_amps?: number
           firmware_type?: string | null
           id?: string
+          max_amps?: number
           name: string
           tenant_id?: number
           timezone?: string
@@ -96,6 +98,7 @@ export type Database = {
           default_amps?: number
           firmware_type?: string | null
           id?: string
+          max_amps?: number
           name?: string
           tenant_id?: number
           timezone?: string

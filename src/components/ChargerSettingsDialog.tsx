@@ -57,6 +57,8 @@ const TIMEZONE_OPTIONS = [
   "Africa/Johannesburg", "Africa/Lagos", "Africa/Cairo",
 ];
 
+const AMP_OPTIONS = [6, 8, 10, 12, 16, 20, 24, 32, 40, 48];
+
 // Firmware-specific setup guides
 function getFirmwareGuide(firmware: string | null, webhookUrl: string, commandsUrl: string, deviceId: string, apiKey: string) {
   const truncId = deviceId.slice(0, 8) + "...";
@@ -279,6 +281,7 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
   const [firmwareType, setFirmwareType] = useState(device.firmware_type || "");
   const [location, setLocation] = useState(device.url || "");
   const [timezone, setTimezone] = useState((device as any).timezone || "America/New_York");
+  const [maxAmps, setMaxAmps] = useState((device as any).max_amps ?? 40);
   const [defaultAmps, setDefaultAmps] = useState((device as any).default_amps ?? 32);
   const [autoStart, setAutoStart] = useState((device as any).auto_start ?? false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -311,7 +314,8 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
       firmware_type: firmwareType || null,
       url: location.trim() || null,
       timezone,
-      default_amps: defaultAmps,
+      max_amps: maxAmps,
+      default_amps: Math.min(defaultAmps, maxAmps),
       auto_start: autoStart,
     } as any).eq("id", device.id);
     if (error) toast.error(error.message);
@@ -539,13 +543,38 @@ Content-Type: application/json
                 </Select>
               </div>
             </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Max amps (charger limit)</Label>
+                <Select value={String(maxAmps)} onValueChange={(v) => { const m = parseInt(v); setMaxAmps(m); if (defaultAmps > m) setDefaultAmps(m); }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AMP_OPTIONS.map((a) => (
+                      <SelectItem key={a} value={String(a)}>{a}A</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Maximum amperage your charger hardware supports</p>
+              </div>
+            </div>
 
             <div className="rounded-lg border p-4 space-y-4">
               <p className="text-sm font-medium">Charging defaults</p>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Default amps</Label>
-                  <Input type="number" min={6} max={80} value={defaultAmps} onChange={(e) => setDefaultAmps(parseInt(e.target.value) || 32)} />
+                  <Select value={String(defaultAmps)} onValueChange={(v) => setDefaultAmps(parseInt(v))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AMP_OPTIONS.filter((a) => a <= maxAmps).map((a) => (
+                        <SelectItem key={a} value={String(a)}>{a}A</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-muted-foreground">Charging current limit when a session starts</p>
                 </div>
                 <div className="space-y-2 flex flex-col justify-center">
