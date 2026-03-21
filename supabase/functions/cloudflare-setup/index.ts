@@ -444,19 +444,37 @@ Deno.serve(async (req) => {
       const ocppWorkerData = await ocppWorkerRes.json();
       results.ocpp_worker = ocppWorkerData.success ? "deployed" : ocppWorkerData.errors;
 
-      // Create DNS records for api.juice.ninja and ocpp.juice.ninja
+      // Ensure DNS records for api.juice.ninja and ocpp.juice.ninja are Cloudflare-proxied
+      // (users may manually edit DNS and accidentally break worker routing)
       for (const sub of ["api", "ocpp"]) {
-        // Check if record already exists
-        const existing = await cfFetch(`/zones/${zoneId}/dns_records?type=AAAA&name=${sub}.juice.ninja`, token);
-        if (existing.result && existing.result.length > 0) {
-          results[`dns_${sub}`] = "already exists";
-          continue;
-        }
-
+        const fqdn = `${sub}.juice.ninja`;
         try {
-          // Proxied AAAA record (Cloudflare Workers use proxied records)
-          await cfFetch(`/zones/${zoneId}/dns_records`, token, {
-            method: "POST",
+          const existing = await cfFetch(`/zones/${zoneId}/dns_records?name=${fqdn}`, token);
+          const existingAaaa = (existing.result || []).find((r: any) => r.type === "AAAA");
+
+          if (!existingAaaa) {
+            await cfFetch(`/zones/${zoneId}/dns_records`, token, {
+              method: "POST",
+              body: JSON.stringify({
+                type: "AAAA",
+                name: sub,
+                content: "100::",
+                proxied: true,
+                ttl: 1,
+              }),
+            });
+            results[`dns_${sub}`] = "created";
+            continue;
+          }
+
+          const needsUpdate = existingAaaa.content !== "100::" || existingAaaa.proxied !== true || existingAaaa.ttl !== 1;
+          if (!needsUpdate) {
+            results[`dns_${sub}`] = "already exists";
+            continue;
+          }
+
+          await cfFetch(`/zones/${zoneId}/dns_records/${existingAaaa.id}`, token, {
+            method: "PATCH",
             body: JSON.stringify({
               type: "AAAA",
               name: sub,
@@ -465,7 +483,7 @@ Deno.serve(async (req) => {
               ttl: 1,
             }),
           });
-          results[`dns_${sub}`] = "created";
+          results[`dns_${sub}`] = "updated";
         } catch (e) {
           results[`dns_${sub}`] = `error: ${e.message}`;
         }
