@@ -314,8 +314,7 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
       firmware_type: firmwareType || null,
       url: location.trim() || null,
       timezone,
-      max_amps: maxAmps,
-      default_amps: Math.min(defaultAmps, maxAmps),
+      default_amps: Math.min(defaultAmps, maxAmps || 48),
       auto_start: autoStart,
     } as any).eq("id", device.id);
     if (error) toast.error(error.message);
