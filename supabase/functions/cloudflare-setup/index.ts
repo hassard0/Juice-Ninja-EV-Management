@@ -184,7 +184,7 @@ async function handleWebSocket(request) {
   // Poll for pending commands every 10 seconds
   const commandPollInterval = setInterval(async () => {
     try {
-      const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + deviceId + '&status=eq.pending&order=created_at', {
+      const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
