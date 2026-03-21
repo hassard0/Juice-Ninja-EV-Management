@@ -70,7 +70,11 @@ const SERVICE_KEY = 'SERVICE_KEY_PLACEHOLDER';
 
 const STATUS_REQUEST_INTERVAL_MS = 30_000;
 const METER_REQUEST_INTERVAL_MS = 10_000;
+const PING_INTERVAL_MS = 20_000;
+const DEVICE_TOUCH_INTERVAL_MS = 10_000;
+const STALE_PROBE_INTERVAL_MS = 20_000;
 const SOCKET_STALE_RECONNECT_MS = 90_000;
+const SOCKET_HARD_RECONNECT_MS = 4 * 60_000;
 
 addEventListener('fetch', event => {
   if (event.request.headers.get('Upgrade') === 'websocket') {
@@ -151,7 +155,31 @@ async function handleWebSocket(request) {
   let lastStatusRequestAt = 0;
   let lastMeterRequestAt = 0;
   let lastMeterRxAt = 0;
+  let lastStaleProbeAt = 0;
+  let lastDeviceTouchAt = 0;
   let isDisconnected = false;
+
+  const touchDevice = async (extra = {}, force = false) => {
+    const now = Date.now();
+    const onlyHeartbeatTouch = Object.keys(extra).length === 0;
+    if (!force && onlyHeartbeatTouch && now - lastDeviceTouchAt < DEVICE_TOUCH_INTERVAL_MS) return;
+    lastDeviceTouchAt = now;
+
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': 'Bearer ' + SERVICE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ updated_at: new Date().toISOString(), ...extra }),
+      });
+    } catch (touchErr) {
+      console.error('Failed to touch device heartbeat:', touchErr);
+    }
+  };
 
   server.addEventListener('message', async (event) => {
     try {
@@ -167,6 +195,7 @@ async function handleWebSocket(request) {
               : String(raw);
       const msg = JSON.parse(text.trim());
       lastRxAt = Date.now();
+      await touchDevice();
 
       // OCPP 1.6J message format: [MessageTypeId, UniqueId, Action, Payload]
       // or [MessageTypeId, UniqueId, Payload] for responses
@@ -246,7 +275,7 @@ async function handleWebSocket(request) {
     }
   });
 
-  // WebSocket-level ping every 20s to prevent Cloudflare idle timeout (which kills at ~100s idle)
+  // WebSocket-level ping to prevent Cloudflare idle timeout (which kills at ~100s idle)
   const pingInterval = setInterval(() => {
     try {
       // OCPP Heartbeat as application-level ping — charger MUST respond, keeping the socket alive
@@ -254,33 +283,39 @@ async function handleWebSocket(request) {
     } catch (_) {
       // Socket dead — disconnect handler will clean up
     }
-  }, 20_000);
+  }, PING_INTERVAL_MS);
 
   // Poll for pending commands every 5 seconds.
   const commandPollInterval = setInterval(async () => {
     try {
       const now = Date.now();
+      const staleForMs = now - lastRxAt;
 
-      // If charger went silent while socket is still open, force reconnect to recover.
-      if (now - lastRxAt > SOCKET_STALE_RECONNECT_MS) {
-        console.log('Stale socket for ' + resolvedDeviceId + ' - closing to force reconnect');
-        try {
-          server.close(1012, 'upstream_stale');
-        } catch (_) {}
+      // Stale-recovery strategy:
+      // 1) After stale threshold, probe aggressively without dropping session.
+      // 2) If still stale after hard threshold, force reconnect.
+      if (staleForMs > SOCKET_STALE_RECONNECT_MS) {
+        if (now - lastStaleProbeAt >= STALE_PROBE_INTERVAL_MS) {
+          lastStaleProbeAt = now;
+          try {
+            server.send(JSON.stringify([2, 'stale-hb-' + now, 'TriggerMessage', { requestedMessage: 'Heartbeat' }]));
+          } catch (_) {}
+          try {
+            server.send(JSON.stringify([2, 'stale-st-' + now, 'TriggerMessage', { requestedMessage: 'StatusNotification' }]));
+          } catch (_) {}
+          try {
+            server.send(JSON.stringify([2, 'stale-mv-' + now, 'TriggerMessage', { requestedMessage: 'MeterValues' }]));
+          } catch (_) {}
+        }
+
+        if (staleForMs > SOCKET_HARD_RECONNECT_MS) {
+          console.log('Hard stale socket for ' + resolvedDeviceId + ' - closing to force reconnect');
+          try {
+            server.close(1012, 'upstream_hard_stale');
+          } catch (_) {}
+        }
         return;
       }
-
-      // Update device timestamp on every poll cycle to keep it "online"
-      await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
-        method: 'PATCH',
-        headers: {
-          'apikey': SERVICE_KEY,
-          'Authorization': 'Bearer ' + SERVICE_KEY,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
-        body: JSON.stringify({ updated_at: new Date().toISOString() }),
-      });
 
       const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status,default_amps', {
         headers: {
@@ -301,6 +336,11 @@ async function handleWebSocket(request) {
           server.send(JSON.stringify([2, 'ts-' + now, 'TriggerMessage', { requestedMessage: 'StatusNotification' }]));
           lastStatusRequestAt = now;
         } catch (_) {}
+      }
+
+      // Session is fresh again after receiving any inbound frame.
+      if (staleForMs <= SOCKET_STALE_RECONNECT_MS) {
+        lastStaleProbeAt = 0;
       }
 
       if (shouldRequestMeter) {
@@ -358,7 +398,7 @@ async function handleWebSocket(request) {
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal',
         },
-        body: JSON.stringify({ charging_status: 'unknown', updated_at: new Date().toISOString() }),
+        body: JSON.stringify({ charging_status: 'unknown', vehicle_connected: false }),
       });
     } catch (_) {}
 
@@ -555,18 +595,6 @@ function mapCommandToOcpp(cmd, persistedTransactionId = null, defaultAmps = 32) 
 }
 
 async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payload) {
-  // Update device last-seen timestamp on every OCPP message
-  await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
-    method: 'PATCH',
-    headers: {
-      'apikey': SERVICE_KEY,
-      'Authorization': 'Bearer ' + SERVICE_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal',
-    },
-    body: JSON.stringify({ updated_at: new Date().toISOString() }),
-  });
-
   switch (action) {
     case 'BootNotification':
       server.send(JSON.stringify([3, uniqueId, {
