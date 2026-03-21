@@ -543,22 +543,12 @@ Content-Type: application/json
                 </Select>
               </div>
             </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Max amps (charger limit)</Label>
-                <Select value={String(maxAmps)} onValueChange={(v) => { const m = parseInt(v); setMaxAmps(m); if (defaultAmps > m) setDefaultAmps(m); }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AMP_OPTIONS.map((a) => (
-                      <SelectItem key={a} value={String(a)}>{a}A</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Maximum amperage your charger hardware supports</p>
+            {maxAmps > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Zap className="h-4 w-4" />
+                <span>Charger maximum: <strong className="text-foreground">{maxAmps}A</strong></span>
               </div>
-            </div>
+            )}
 
             <div className="rounded-lg border p-4 space-y-4">
               <p className="text-sm font-medium">Charging defaults</p>
