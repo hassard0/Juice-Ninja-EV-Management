@@ -193,7 +193,7 @@ export default function Settings() {
               </div>
               <div className="space-y-2">
                 <Label>Time format</Label>
-                <Select value={timeFormat} onValueChange={setTimeFormat}>
+                <Select value={timeFormat} onValueChange={(value) => setTimeFormat(value === "12h" ? "12h" : "24h")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
