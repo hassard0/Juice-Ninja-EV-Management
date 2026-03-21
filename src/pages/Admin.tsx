@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Users, Zap, Activity, Battery, Loader2, ShieldCheck } from "lucide-react";
+import { isDeviceOnline } from "@/lib/device-status";
 
 interface ProfileRow {
   user_id: string;
@@ -77,7 +78,7 @@ export default function Admin() {
   if (!isAdmin) return null;
 
   const now = Date.now();
-  const onlineDevices = devices.filter(d => now - new Date(d.updated_at).getTime() < 5 * 60 * 1000);
+  const onlineDevices = devices.filter((d) => isDeviceOnline(d, now));
   const connectedVehicles = devices.filter(d => d.vehicle_connected);
   const totalEnergy = sessions.reduce((sum, s) => sum + (s.energy_kwh || 0), 0);
 
@@ -202,7 +203,7 @@ export default function Admin() {
               </TableHeader>
               <TableBody>
                 {devices.map((d) => {
-                  const online = now - new Date(d.updated_at).getTime() < 5 * 60 * 1000;
+                  const online = isDeviceOnline(d, now);
                   return (
                     <TableRow key={d.id}>
                       <TableCell className="font-medium">{d.name}</TableCell>

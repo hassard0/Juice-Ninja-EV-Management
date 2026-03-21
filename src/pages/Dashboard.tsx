@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import AddChargerDialog from "@/components/AddChargerDialog";
 import type { Database } from "@/integrations/supabase/types";
+import { isDeviceOnline, TELEMETRY_FRESH_MS } from "@/lib/device-status";
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
 type Telemetry = Database["public"]["Tables"]["telemetry"]["Row"];
@@ -113,14 +114,12 @@ export default function Dashboard() {
   }, [latestTelemetry]);
 
   const getDeviceStatus = (device: Device): "charging" | "idle" | "offline" => {
-    const lastSeen = new Date(device.updated_at).getTime();
-    const age = Date.now() - lastSeen;
-    if (age > 3 * 60 * 1000) return "offline";
+    if (!isDeviceOnline(device)) return "offline";
     const tele = telemetryByDevice[device.id];
     // Only trust telemetry amps if the reading itself is recent (< 2 min)
     if (tele && (tele.amps ?? 0) > 1) {
       const teleAge = Date.now() - new Date(tele.recorded_at).getTime();
-      if (teleAge < 2 * 60 * 1000) return "charging";
+      if (teleAge < TELEMETRY_FRESH_MS) return "charging";
     }
     return "idle";
   };
@@ -133,11 +132,11 @@ export default function Dashboard() {
     const temperature = tele?.temperature ?? null;
     const teleAge = tele ? Date.now() - new Date(tele.recorded_at).getTime() : Infinity;
     return {
-      amps: teleAge < 2 * 60 * 1000 ? amps : 0,
-      voltage: teleAge < 2 * 60 * 1000 ? voltage : 0,
-      power_kw: teleAge < 2 * 60 * 1000 ? (amps * voltage) / 1000 : 0,
+      amps: teleAge < TELEMETRY_FRESH_MS ? amps : 0,
+      voltage: teleAge < TELEMETRY_FRESH_MS ? voltage : 0,
+      power_kw: teleAge < TELEMETRY_FRESH_MS ? (amps * voltage) / 1000 : 0,
       session_kwh: wh / 1000,
-      temperature: teleAge < 2 * 60 * 1000 ? temperature : null,
+      temperature: teleAge < TELEMETRY_FRESH_MS ? temperature : null,
     };
   };
 
