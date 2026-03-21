@@ -93,7 +93,7 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
       setCreatedDeviceId(data.id);
       setGeneratedKey(apiKey);
       setStep("credentials");
-      onAdded();
+      // Don't call onAdded yet — wait until user clicks Done
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -102,6 +102,9 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
   };
 
   const handleClose = (isOpen: boolean) => {
+    if (!isOpen && step === "credentials") {
+      onAdded(); // Refresh device list only after user has seen credentials
+    }
     setOpen(isOpen);
     if (!isOpen) resetForm();
   };
@@ -113,7 +116,7 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
           <Plus className="h-4 w-4 mr-1" /> Add charger
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto" onInteractOutside={step === "credentials" ? (e) => e.preventDefault() : undefined}>
         {step === "details" ? (
           <>
             <DialogHeader>
