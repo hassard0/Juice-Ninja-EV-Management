@@ -306,7 +306,7 @@ export default function DeviceDetail() {
         {/* Live stats */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           {[
-            { label: "Status", value: isCharging ? "Charging" : "Idle", icon: BatteryCharging },
+            { label: "Status", value: displayCharging ? "Charging" : "Idle", icon: BatteryCharging },
             { label: "Current", value: `${currentAmps.toFixed(1)} A`, icon: Activity },
             { label: "Voltage", value: `${currentVoltage.toFixed(0)} V`, icon: Zap },
             { label: "Temperature", value: currentTemp != null ? `${currentTemp.toFixed(0)}°C` : "—", icon: Thermometer },
