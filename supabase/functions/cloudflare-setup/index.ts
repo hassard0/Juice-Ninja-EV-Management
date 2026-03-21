@@ -83,27 +83,39 @@ async function handleWebSocket(request) {
   const deviceId = pathParts[pathParts.length - 1];
 
   if (!deviceId) {
-    return new Response('Missing device ID in path', { status: 400 });
+    return new Response('Missing device ID in path. Use wss://ocpp.juice.ninja/<device-id>', { status: 400 });
   }
 
-  const [client, server] = Object.values(new WebSocketPair());
+  // OCPP chargers often require explicit subprotocol negotiation
+  const requestedProtocols = (request.headers.get('Sec-WebSocket-Protocol') || '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const selectedProtocol = requestedProtocols.find((p) => {
+    const v = p.toLowerCase();
+    return v === 'ocpp1.6' || v === 'ocpp1.6j' || v === 'ocpp2.0.1';
+  }) || requestedProtocols[0] || null;
 
-  server.accept();
-
-  // Verify device exists
+  // Verify device exists before accepting the socket
   const verifyRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId + '&select=id,api_key', {
     headers: {
       'apikey': SERVICE_KEY,
       'Authorization': 'Bearer ' + SERVICE_KEY,
     },
   });
+
+  if (!verifyRes.ok) {
+    return new Response('Failed to validate device', { status: 502 });
+  }
+
   const devices = await verifyRes.json();
   if (!devices || devices.length === 0) {
-    server.close(4001, 'Unknown device');
-    return new Response(null, { status: 101, webSocket: client });
+    return new Response('Unknown device ID', { status: 403 });
   }
 
   const device = devices[0];
+  const [client, server] = Object.values(new WebSocketPair());
+  server.accept();
 
   server.addEventListener('message', async (event) => {
     try {
@@ -171,7 +183,8 @@ async function handleWebSocket(request) {
     clearInterval(commandPollInterval);
   });
 
-  return new Response(null, { status: 101, webSocket: client });
+  const responseHeaders = selectedProtocol ? { 'Sec-WebSocket-Protocol': selectedProtocol } : undefined;
+  return new Response(null, { status: 101, webSocket: client, headers: responseHeaders });
 }
 
 function mapCommandToOcpp(cmd) {
