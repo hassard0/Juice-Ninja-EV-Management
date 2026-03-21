@@ -79,7 +79,7 @@ export default function Settings() {
         currency,
         currency_symbol: currencyObj?.symbol || "£",
         time_format: timeFormat,
-      } as any);
+      });
       if (error) toast.error(error.message);
       else toast.success("Settings saved");
     }
