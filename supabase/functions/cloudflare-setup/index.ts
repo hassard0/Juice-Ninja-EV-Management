@@ -306,7 +306,9 @@ async function handleWebSocket(request) {
       // Stale-recovery strategy:
       // 1) After stale threshold, probe aggressively without dropping session.
       // 2) If still stale after hard threshold, force reconnect.
-      if (staleForMs > SOCKET_STALE_RECONNECT_MS) {
+      // IMPORTANT: do not return early here — keep polling command queue so Stop/Start are never blocked.
+      const isStaleSocket = staleForMs > SOCKET_STALE_RECONNECT_MS;
+      if (isStaleSocket) {
         if (now - lastStaleProbeAt >= STALE_PROBE_INTERVAL_MS) {
           lastStaleProbeAt = now;
           try {
@@ -326,7 +328,6 @@ async function handleWebSocket(request) {
             server.close(1012, 'upstream_hard_stale');
           } catch (_) {}
         }
-        return;
       }
 
       const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status,default_amps', {
@@ -338,8 +339,8 @@ async function handleWebSocket(request) {
       const devData = await devRes.json();
       const dev = devData && devData[0];
 
-      const shouldRequestStatus = now - lastStatusRequestAt >= STATUS_REQUEST_INTERVAL_MS;
-      const chargerShouldProvideMeter = dev && (dev.vehicle_connected || (dev.charging_status && dev.charging_status !== 'idle' && dev.charging_status !== 'unknown'));
+      const shouldRequestStatus = !isStaleSocket && (now - lastStatusRequestAt >= STATUS_REQUEST_INTERVAL_MS);
+      const chargerShouldProvideMeter = !isStaleSocket && dev && (dev.vehicle_connected || (dev.charging_status && dev.charging_status !== 'idle' && dev.charging_status !== 'unknown'));
       const shouldRequestMeter = chargerShouldProvideMeter
         && (now - lastMeterRequestAt >= METER_REQUEST_INTERVAL_MS || now - lastMeterRxAt >= METER_REQUEST_INTERVAL_MS);
 
