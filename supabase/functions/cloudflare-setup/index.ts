@@ -423,11 +423,35 @@ function nextTransactionId() {
   return Math.floor(Date.now() / 1000);
 }
 
-function mapCommandToOcpp(cmd, persistedTransactionId = null) {
+function mapCommandToOcpp(cmd, persistedTransactionId = null, defaultAmps = 32) {
   const uid = cmd.id;
   switch (cmd.command) {
-    case 'start':
+    case 'start': {
+      const txId = normalizeTransactionId(cmd.payload?.transactionId)
+        || normalizeTransactionId(activeTransactions[cmd.device_id])
+        || normalizeTransactionId(persistedTransactionId);
+
+      // If a transaction already exists, resume by restoring a non-zero profile limit
+      // (RemoteStartTransaction is commonly rejected in this state).
+      if (txId) {
+        const limit = Math.max(6, Math.min(80, Number(cmd.payload?.amps ?? defaultAmps ?? 32)));
+        return [2, uid, 'SetChargingProfile', {
+          connectorId: 1,
+          csChargingProfiles: {
+            chargingProfileId: 1,
+            stackLevel: 0,
+            chargingProfilePurpose: 'TxDefaultProfile',
+            chargingProfileKind: 'Absolute',
+            chargingSchedule: {
+              chargingRateUnit: 'A',
+              chargingSchedulePeriod: [{ startPeriod: 0, limit }],
+            },
+          },
+        }];
+      }
+
       return [2, uid, 'RemoteStartTransaction', { connectorId: 1, idTag: 'juiceninja' }];
+    }
     case 'set_current': {
       const limit = cmd.payload?.amps || 32;
       return [2, uid, 'SetChargingProfile', {
