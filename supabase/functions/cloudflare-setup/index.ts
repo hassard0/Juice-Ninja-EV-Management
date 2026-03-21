@@ -379,9 +379,12 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
       server.send(JSON.stringify([3, uniqueId, {}]));
       break;
 
-    case 'StartTransaction':
-      server.send(JSON.stringify([3, uniqueId, { transactionId: Date.now(), idTagInfo: { status: 'Accepted' } }]));
+    case 'StartTransaction': {
+      const txId = Date.now();
+      activeTransactions[deviceId] = txId;
+      server.send(JSON.stringify([3, uniqueId, { transactionId: txId, idTagInfo: { status: 'Accepted' } }]));
       break;
+    }
 
     case 'StopTransaction':
       server.send(JSON.stringify([3, uniqueId, { idTagInfo: { status: 'Accepted' } }]));
