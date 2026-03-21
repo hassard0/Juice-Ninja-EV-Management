@@ -54,7 +54,7 @@ export default function Settings() {
       if (settingsRes.data) {
         setSettings(settingsRes.data);
         setCurrency(settingsRes.data.currency);
-        setTimeFormat(settingsRes.data.time_format || "24h");
+        setTimeFormat(settingsRes.data.time_format === "12h" ? "12h" : "24h");
       }
       if (tariffsRes.data) setTariffs(tariffsRes.data);
       setLoading(false);
