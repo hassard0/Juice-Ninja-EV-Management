@@ -298,7 +298,7 @@ export default function Dashboard() {
                           </div>
                           <div className="flex items-center gap-1.5 text-muted-foreground">
                             <BatteryCharging className="h-3.5 w-3.5" />
-                            <span className="tabular-nums">{tele.session_kwh.toFixed(1)} kWh</span>
+                            <span className="tabular-nums">{(dailyEnergyByDevice[device.id] || 0).toFixed(1)} kWh</span>
                           </div>
                         </div>
                         <Button
