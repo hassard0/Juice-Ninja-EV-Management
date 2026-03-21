@@ -45,6 +45,8 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
 
   const webhookUrl = `https://api.juice.ninja/functions/v1/telemetry-webhook`;
   const commandsUrl = `https://api.juice.ninja/functions/v1/device-commands`;
+  const ocppUrl = createdDeviceId ? `wss://ocpp.juice.ninja/${createdDeviceId}` : "wss://ocpp.juice.ninja/<device-id>";
+  const isOcppFirmware = ["ocpp", "wallbox", "grizzl-e"].includes(firmwareType);
 
   const resetForm = useCallback(() => {
     setStep("details");
