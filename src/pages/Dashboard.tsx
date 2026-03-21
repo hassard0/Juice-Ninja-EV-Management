@@ -285,7 +285,7 @@ export default function Dashboard() {
                           variant={status === "charging" ? "destructive" : "default"}
                           className="w-full active:scale-[0.97] transition-transform"
                           onClick={(e) => { e.preventDefault(); handleStartStop(device); }}
-                          disabled={status === "offline"}
+                          disabled={status === "offline" || !(device as any).vehicle_connected}
                         >
                           {status === "charging" ? (
                             <><Square className="h-3.5 w-3.5 mr-1" /> Stop</>
