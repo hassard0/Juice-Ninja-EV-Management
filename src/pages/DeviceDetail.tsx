@@ -274,6 +274,7 @@ export default function DeviceDetail() {
   const isCharging = hasLiveCurrent;
   const displayCharging = hasLiveCurrent;
   const isOnline = isDeviceOnline(device);
+  const commandChannelReady = Date.now() - new Date(device.updated_at).getTime() < 90_000;
 
   // Can go back up to 365 days
   const canGoBack = chartDayOffset > -365;
