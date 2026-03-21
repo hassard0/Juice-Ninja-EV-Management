@@ -292,7 +292,10 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
       name: trimmedName,
       firmware_type: firmwareType || null,
       url: location.trim() || null,
-    }).eq("id", device.id);
+      timezone,
+      default_amps: defaultAmps,
+      auto_start: autoStart,
+    } as any).eq("id", device.id);
     if (error) toast.error(error.message);
     else {
       toast.success("Charger updated");
