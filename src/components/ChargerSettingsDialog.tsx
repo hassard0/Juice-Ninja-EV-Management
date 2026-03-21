@@ -57,6 +57,8 @@ const TIMEZONE_OPTIONS = [
   "Africa/Johannesburg", "Africa/Lagos", "Africa/Cairo",
 ];
 
+const AMP_OPTIONS = [6, 8, 10, 12, 16, 20, 24, 32, 40, 48];
+
 // Firmware-specific setup guides
 function getFirmwareGuide(firmware: string | null, webhookUrl: string, commandsUrl: string, deviceId: string, apiKey: string) {
   const truncId = deviceId.slice(0, 8) + "...";
