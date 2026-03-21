@@ -1,0 +1,1 @@
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS max_amps integer NOT NULL DEFAULT 40;
