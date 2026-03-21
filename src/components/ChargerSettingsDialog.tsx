@@ -39,6 +39,23 @@ const FIRMWARE_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
+const TIMEZONE_OPTIONS = [
+  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+  "America/Anchorage", "America/Phoenix", "America/Toronto", "America/Vancouver",
+  "America/Halifax", "America/St_Johns", "America/Edmonton", "America/Winnipeg",
+  "America/Regina", "America/Mexico_City", "America/Bogota", "America/Sao_Paulo",
+  "America/Argentina/Buenos_Aires",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Rome",
+  "Europe/Amsterdam", "Europe/Brussels", "Europe/Zurich", "Europe/Stockholm",
+  "Europe/Oslo", "Europe/Helsinki", "Europe/Warsaw", "Europe/Prague",
+  "Europe/Athens", "Europe/Bucharest", "Europe/Istanbul", "Europe/Moscow",
+  "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Hong_Kong",
+  "Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai", "Asia/Taipei",
+  "Australia/Sydney", "Australia/Melbourne", "Australia/Perth", "Australia/Brisbane",
+  "Pacific/Auckland", "Pacific/Fiji",
+  "Africa/Johannesburg", "Africa/Lagos", "Africa/Cairo",
+];
+
 // Firmware-specific setup guides
 function getFirmwareGuide(firmware: string | null, webhookUrl: string, commandsUrl: string, deviceId: string, apiKey: string) {
   const truncId = deviceId.slice(0, 8) + "...";
