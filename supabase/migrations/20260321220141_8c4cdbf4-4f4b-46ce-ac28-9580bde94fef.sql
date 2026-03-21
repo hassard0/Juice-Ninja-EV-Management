@@ -1,0 +1,1 @@
+DELETE FROM telemetry WHERE id IN ('0fd51b75-e131-4b1e-9f45-c32aa6abff0b', '72845123-2bdf-41a9-b286-d43181cc8888');
