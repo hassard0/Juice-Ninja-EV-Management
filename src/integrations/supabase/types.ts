@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      device_commands: {
+        Row: {
+          acknowledged_at: string | null
+          command: string
+          completed_at: string | null
+          created_at: string
+          device_id: string
+          id: string
+          payload: Json | null
+          result: Json | null
+          status: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          command: string
+          completed_at?: string | null
+          created_at?: string
+          device_id: string
+          id?: string
+          payload?: Json | null
+          result?: Json | null
+          status?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          command?: string
+          completed_at?: string | null
+          created_at?: string
+          device_id?: string
+          id?: string
+          payload?: Json | null
+          result?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_commands_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       devices: {
         Row: {
           api_key: string | null
