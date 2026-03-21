@@ -43,7 +43,7 @@ export default function Settings() {
   const [newStart, setNewStart] = useState("00:00");
   const [newEnd, setNewEnd] = useState("07:00");
   const [newCost, setNewCost] = useState("0.10");
-  const timeInputLang = timeFormat === "12h" ? "en-US" : "en-GB";
+  
 
   useEffect(() => {
     if (!user) return;
