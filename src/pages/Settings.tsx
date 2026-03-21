@@ -68,7 +68,8 @@ export default function Settings() {
       const { error } = await supabase.from("user_settings").update({
         currency,
         currency_symbol: currencyObj?.symbol || "£",
-      }).eq("user_id", user.id);
+        time_format: timeFormat,
+      } as any).eq("user_id", user.id);
       if (error) toast.error(error.message);
       else toast.success("Currency updated");
     } else {
