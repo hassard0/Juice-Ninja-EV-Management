@@ -239,17 +239,19 @@ export default function Settings() {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Start</Label>
+                    <Label className="text-xs">Start · {formatTime(tariff.start_time, timeFormat)}</Label>
                     <Input
                       type="time"
+                      lang={timeInputLang}
                       value={tariff.start_time.slice(0, 5)}
                       onChange={(e) => handleUpdateTariff(tariff, "start_time", e.target.value)}
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">End</Label>
+                    <Label className="text-xs">End · {formatTime(tariff.end_time, timeFormat)}</Label>
                     <Input
                       type="time"
+                      lang={timeInputLang}
                       value={tariff.end_time.slice(0, 5)}
                       onChange={(e) => handleUpdateTariff(tariff, "end_time", e.target.value)}
                     />
