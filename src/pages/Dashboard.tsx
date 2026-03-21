@@ -31,6 +31,7 @@ export default function Dashboard() {
       if (error) throw error;
       return data as Device[];
     },
+    refetchInterval: 30000,
   });
 
   const { data: userSettings } = useQuery({

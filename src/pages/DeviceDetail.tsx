@@ -36,17 +36,21 @@ export default function DeviceDetail() {
   // Chart date navigation — offset in days from today (0 = today, -1 = yesterday, etc.)
   const [chartDayOffset, setChartDayOffset] = useState(0);
 
-  const fetchDevice = useCallback(async () => {
-    if (!id) return;
-    const { data, error } = await supabase.from("devices").select("*").eq("id", id).single();
-    if (error || !data) {
-      toast.error("Charger not found");
-      navigate("/dashboard");
-      return;
-    }
-    setDevice(data);
-    setLoading(false);
-  }, [id, navigate]);
+  const { data: device, isLoading: loading } = useQuery<Device | null>({
+    queryKey: ["device", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data, error } = await supabase.from("devices").select("*").eq("id", id).single();
+      if (error || !data) {
+        toast.error("Charger not found");
+        navigate("/dashboard");
+        return null;
+      }
+      return data;
+    },
+    enabled: !!id,
+    refetchInterval: 15000,
+  });
 
   const fetchSchedules = useCallback(async () => {
     if (!id) return;
