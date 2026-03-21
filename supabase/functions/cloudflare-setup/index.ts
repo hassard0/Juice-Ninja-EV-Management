@@ -155,6 +155,7 @@ async function handleWebSocket(request) {
   let lastStatusRequestAt = 0;
   let lastMeterRequestAt = 0;
   let lastMeterRxAt = 0;
+  let lastMeasuredAmps = 0;
   let lastStaleProbeAt = 0;
   let lastDeviceTouchAt = 0;
   let isDisconnected = false;
@@ -212,7 +213,18 @@ async function handleWebSocket(request) {
       if (messageType === 2) {
         // CALL from charger
         if (action === 'StatusNotification') lastStatusRequestAt = Date.now();
-        if (action === 'MeterValues') lastMeterRxAt = Date.now();
+        if (action === 'MeterValues') {
+          lastMeterRxAt = Date.now();
+          const sampledValues = payload?.meterValue?.[0]?.sampledValue || [];
+          for (const sv of sampledValues) {
+            if (sv?.measurand !== 'Current.Import') continue;
+            const parsedAmps = Number(sv?.value);
+            if (Number.isFinite(parsedAmps)) {
+              lastMeasuredAmps = parsedAmps;
+              break;
+            }
+          }
+        }
         await handleOcppCall(server, resolvedDeviceId, device.api_key, uniqueId, action, payload);
       } else if (messageType === 3) {
         // CALLRESULT - charger responding to our command
@@ -363,11 +375,38 @@ async function handleWebSocket(request) {
           // STOP ESCALATION SEQUENCE: fire all three methods rapidly
           await handleStopEscalation(server, cmd, dev?.active_transaction_id, outboundCommands);
         } else {
-          const ocppMsg = mapCommandToOcpp(cmd, dev?.active_transaction_id, dev?.default_amps);
+          const ocppMsg = mapCommandToOcpp(cmd, {
+            persistedTransactionId: dev?.active_transaction_id,
+            defaultAmps: dev?.default_amps,
+            chargingStatus: dev?.charging_status,
+            lastMeasuredAmps,
+          });
           if (!ocppMsg) {
             await patchCommand(cmd.id, 'failed', { error: 'Unable to build OCPP command payload' });
             continue;
           }
+
+          // If we had a stale tx id but selected RemoteStart, clear stale transaction state first.
+          if (
+            cmd.command === 'start'
+            && ocppMsg[2] === 'RemoteStartTransaction'
+            && normalizeTransactionId(dev?.active_transaction_id)
+          ) {
+            delete activeTransactions[resolvedDeviceId];
+            try {
+              await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
+                method: 'PATCH',
+                headers: {
+                  'apikey': SERVICE_KEY,
+                  'Authorization': 'Bearer ' + SERVICE_KEY,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal',
+                },
+                body: JSON.stringify({ active_transaction_id: null }),
+              });
+            } catch (_) {}
+          }
+
           try {
             server.send(JSON.stringify(ocppMsg));
             const commandUid = ocppMsg[1];
@@ -544,7 +583,11 @@ function nextTransactionId() {
   return Math.floor(Date.now() / 1000);
 }
 
-function mapCommandToOcpp(cmd, persistedTransactionId = null, defaultAmps = 32) {
+function mapCommandToOcpp(cmd, context = {}) {
+  const persistedTransactionId = context.persistedTransactionId ?? null;
+  const defaultAmps = context.defaultAmps ?? 32;
+  const chargingStatus = String(context.chargingStatus || '').toLowerCase();
+  const lastMeasuredAmps = Number(context.lastMeasuredAmps ?? 0);
   const uid = cmd.id;
   switch (cmd.command) {
     case 'start': {
@@ -552,9 +595,16 @@ function mapCommandToOcpp(cmd, persistedTransactionId = null, defaultAmps = 32) 
         || normalizeTransactionId(activeTransactions[cmd.device_id])
         || normalizeTransactionId(persistedTransactionId);
 
+      const hasLiveCurrent = Number.isFinite(lastMeasuredAmps) && lastMeasuredAmps > 1;
+      const canResumeExistingTx = !!txId && (
+        chargingStatus === 'charging'
+        || chargingStatus === 'suspended'
+        || hasLiveCurrent
+      );
+
       // If a transaction already exists, resume by restoring a non-zero profile limit
       // (RemoteStartTransaction is commonly rejected in this state).
-      if (txId) {
+      if (canResumeExistingTx) {
         const limit = Math.max(6, Math.min(80, Number(cmd.payload?.amps ?? defaultAmps ?? 32)));
         return [2, uid, 'SetChargingProfile', {
           connectorId: 1,
