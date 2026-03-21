@@ -251,6 +251,18 @@ function mapCommandToOcpp(cmd) {
 }
 
 async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payload) {
+  // Update device last-seen timestamp on every OCPP message
+  await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SERVICE_KEY,
+      'Authorization': 'Bearer ' + SERVICE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify({ updated_at: new Date().toISOString() }),
+  });
+
   switch (action) {
     case 'BootNotification':
       server.send(JSON.stringify([3, uniqueId, {
