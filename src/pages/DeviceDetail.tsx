@@ -173,7 +173,7 @@ export default function DeviceDetail() {
   }, [rawTelemetry]);
 
   // Latest telemetry values and session energy (delta between first and last wh reading of the day)
-  const latest = rawTelemetry.length > 0 && chartDayOffset === 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
+  const latest = latestTelemetry ?? null;
   const meterEnergyWh = useMemo(() => {
     const whValues = rawTelemetry.filter((t) => t.wh != null).map((t) => t.wh!);
     if (whValues.length < 2) return 0;
