@@ -331,7 +331,12 @@ export default function DeviceDetail() {
             className="active:scale-[0.97] transition-transform"
             disabled={!isOnline || !isCharging}
             onClick={async () => {
-              const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "stop" });
+              const txId = (device as any)?.active_transaction_id;
+              const { error } = await supabase.from("device_commands").insert({
+                device_id: device.id,
+                command: "stop",
+                payload: txId ? { transactionId: txId } : {},
+              });
               if (error) toast.error(error.message);
               else toast.success("Stop command sent to charger");
             }}
