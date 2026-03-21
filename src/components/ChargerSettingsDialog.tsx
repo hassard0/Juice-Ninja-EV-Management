@@ -545,7 +545,16 @@ Content-Type: application/json
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Default amps</Label>
-                  <Input type="number" min={6} max={80} value={defaultAmps} onChange={(e) => setDefaultAmps(parseInt(e.target.value) || 32)} />
+                  <Select value={String(defaultAmps)} onValueChange={(v) => setDefaultAmps(parseInt(v))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AMP_OPTIONS.filter((a) => a <= ((device as any).max_amps || 40)).map((a) => (
+                        <SelectItem key={a} value={String(a)}>{a}A</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-muted-foreground">Charging current limit when a session starts</p>
                 </div>
                 <div className="space-y-2 flex flex-col justify-center">
