@@ -70,7 +70,7 @@ export default function Settings() {
         currency,
         currency_symbol: currencyObj?.symbol || "£",
         time_format: timeFormat,
-      } as any).eq("user_id", user.id);
+      }).eq("user_id", user.id);
       if (error) toast.error(error.message);
       else toast.success("Currency updated");
     } else {
