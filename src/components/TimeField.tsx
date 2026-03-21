@@ -44,11 +44,11 @@ export default function TimeField({ value, format, onChange, className }: TimeFi
   };
 
   return (
-    <div className={cn("grid grid-cols-2 gap-2", format === "12h" && "grid-cols-3", className)}>
+    <div className={cn("grid gap-1", format === "12h" ? "grid-cols-3" : "grid-cols-2", className)}>
       {format === "24h" ? (
         <Select value={String(hour24)} onValueChange={(nextHour) => apply24h(parseInt(nextHour, 10), minute)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Hour" />
+          <SelectTrigger className="h-9 px-2 text-xs min-w-0">
+            <SelectValue placeholder="Hr" />
           </SelectTrigger>
           <SelectContent>
             {HOURS_24.map((hour) => (
@@ -61,8 +61,8 @@ export default function TimeField({ value, format, onChange, className }: TimeFi
           value={String(hour12)}
           onValueChange={(nextHour) => apply24h(to24Hour(parseInt(nextHour, 10), meridiem), minute)}
         >
-          <SelectTrigger>
-            <SelectValue placeholder="Hour" />
+          <SelectTrigger className="h-9 px-2 text-xs min-w-0">
+            <SelectValue placeholder="Hr" />
           </SelectTrigger>
           <SelectContent>
             {HOURS_12.map((hour) => (
@@ -73,7 +73,7 @@ export default function TimeField({ value, format, onChange, className }: TimeFi
       )}
 
       <Select value={minuteValue} onValueChange={(nextMinute) => apply24h(hour24, parseInt(nextMinute, 10))}>
-        <SelectTrigger>
+        <SelectTrigger className="h-9 px-2 text-xs min-w-0">
           <SelectValue placeholder="Min" />
         </SelectTrigger>
         <SelectContent>
@@ -85,8 +85,8 @@ export default function TimeField({ value, format, onChange, className }: TimeFi
 
       {format === "12h" && (
         <Select value={meridiem} onValueChange={(nextMeridiem) => apply24h(to24Hour(hour12, nextMeridiem as "AM" | "PM"), minute)}>
-          <SelectTrigger>
-            <SelectValue placeholder="AM/PM" />
+          <SelectTrigger className="h-9 px-2 text-xs min-w-0">
+            <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="AM">AM</SelectItem>
