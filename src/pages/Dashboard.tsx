@@ -114,7 +114,11 @@ export default function Dashboard() {
     const age = Date.now() - lastSeen;
     if (age > 3 * 60 * 1000) return "offline";
     const tele = telemetryByDevice[device.id];
-    if ((tele?.amps ?? 0) > 1) return "charging";
+    // Only trust telemetry amps if the reading itself is recent (< 2 min)
+    if (tele && (tele.amps ?? 0) > 1) {
+      const teleAge = Date.now() - new Date(tele.recorded_at).getTime();
+      if (teleAge < 2 * 60 * 1000) return "charging";
+    }
     return "idle";
   };
 

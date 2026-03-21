@@ -146,7 +146,8 @@ export default function DeviceDetail() {
   const currentVoltage = latest?.voltage ?? 0;
   const currentTemp = latest?.temperature ?? null;
   const totalWh = latest?.wh ?? 0;
-  const isCharging = currentAmps > 1;
+  const latestTeleAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
+  const isCharging = currentAmps > 1 && latestTeleAge < 2 * 60 * 1000;
   const isOnline = latestAge < 5 * 60 * 1000;
 
   return (
