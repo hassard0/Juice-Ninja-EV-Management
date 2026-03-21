@@ -91,20 +91,21 @@ function getFirmwareGuide(firmware: string | null, webhookUrl: string, commandsU
     case "ocpp":
       return {
         title: "OCPP 1.6J Central System",
-        description: "OCPP chargers connect to a Central System Management Server (CSMS) via WebSocket. Juice Ninja acts as your CSMS.",
+        description: "OCPP uses a single persistent WebSocket connection between charger and Central System. All communication — telemetry (MeterValues), status updates (StatusNotification), and remote control (RemoteStartTransaction, RemoteStopTransaction) — flows over this one connection.",
         steps: [
           {
             where: "Charger configuration panel → OCPP Settings",
             instructions: [
-              "Access your charger's configuration interface (this varies by manufacturer — check your charger's manual for the admin panel URL or app).",
-              "Find the OCPP settings section (sometimes under Network, Cloud, or Backend).",
-              "Set the OCPP version to 1.6 or 1.6J.",
-              `Set the Central System URL (CSMS URL) to:\n  ${webhookUrl}`,
-              `Set the Charge Point ID (Station ID) to:\n  ${deviceId}`,
-              `If your charger supports an authentication key/password, set it to your API key:\n  ${truncKey}`,
-              "Set the Heartbeat Interval to 60 seconds.",
-              "Enable Meter Values reporting if available (interval: 30s, measurands: Energy.Active.Import.Register, Current.Import, Voltage, Temperature).",
-              "Save and restart the charger. It should connect automatically.",
+              "Access your charger's configuration interface (varies by manufacturer — check your manual for the admin panel URL or app).",
+              "Find the OCPP settings section (sometimes labelled Network, Cloud, Backend, or Central System).",
+              "Set the OCPP version/protocol to 1.6J (JSON over WebSocket).",
+              `Set the Central System URL (CSMS URL / WebSocket URL) to:\n  ws://${webhookUrl.replace(/^https?:\/\//, "")}/${deviceId}`,
+              "Note: this is a single WebSocket endpoint — the charger handles telemetry reporting AND receives commands over the same connection.",
+              `Set the Charge Point ID (Station Identity) to:\n  ${deviceId}`,
+              `If your charger supports a CSMS password or authentication key, set it to:\n  ${truncKey}`,
+              "Configure MeterValues interval to 30 seconds with measurands: Energy.Active.Import.Register, Current.Import, Voltage, Temperature.",
+              "Set Heartbeat Interval to 60 seconds.",
+              "Save and restart. The charger will open a WebSocket to Juice Ninja and begin sending BootNotification, then periodic Heartbeat and MeterValues messages. Remote start/stop commands are sent back over the same connection.",
             ],
           },
         ],
