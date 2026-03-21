@@ -247,7 +247,7 @@ export default function DeviceDetail() {
         </div>
 
         {/* Quick controls */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button
             className="active:scale-[0.97] transition-transform"
             disabled={!isOnline || !vehicleConnected || isCharging}
