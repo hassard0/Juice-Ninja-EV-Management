@@ -234,10 +234,10 @@ async function handleWebSocket(request) {
     }
   });
 
-  // Poll for pending commands every 10 seconds and keep device alive.
+  // Poll for pending commands every 5 seconds and keep device alive.
   const commandPollInterval = setInterval(async () => {
     try {
-      // Update device timestamp to keep it "online" even between charger heartbeats
+      // Update device timestamp to keep it "online"
       await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
         method: 'PATCH',
         headers: {
@@ -249,7 +249,7 @@ async function handleWebSocket(request) {
         body: JSON.stringify({ updated_at: new Date().toISOString() }),
       });
 
-      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id', {
+      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
@@ -258,7 +258,15 @@ async function handleWebSocket(request) {
       const devData = await devRes.json();
       const dev = devData && devData[0];
 
-      // Send one command at a time to avoid command storms on charger firmware
+      // Request fresh telemetry when vehicle is connected
+      if (dev && (dev.vehicle_connected || (dev.charging_status && dev.charging_status !== 'idle' && dev.charging_status !== 'unknown'))) {
+        try {
+          server.send(JSON.stringify([2, 'tv-' + Date.now(), 'TriggerMessage', { requestedMessage: 'MeterValues' }]));
+          server.send(JSON.stringify([2, 'ts-' + Date.now(), 'TriggerMessage', { requestedMessage: 'StatusNotification' }]));
+        } catch (_) {}
+      }
+
+      // Send one command at a time
       const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at&limit=1', {
         headers: {
           'apikey': SERVICE_KEY,
@@ -267,62 +275,29 @@ async function handleWebSocket(request) {
       });
       const commands = await cmdRes.json();
       for (const cmd of (commands || [])) {
-        const ocppMsg = mapCommandToOcpp(cmd, dev?.active_transaction_id);
-        if (!ocppMsg) {
-          await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SERVICE_KEY,
-              'Authorization': 'Bearer ' + SERVICE_KEY,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: JSON.stringify({
-              status: 'failed',
-              completed_at: new Date().toISOString(),
-              result: { error: 'Unable to build OCPP command payload' },
-            }),
-          });
-          continue;
-        }
-
-        try {
-          server.send(JSON.stringify(ocppMsg));
-          const commandUid = ocppMsg[1];
-          outboundCommands[commandUid] = { commandId: cmd.id, command: cmd.command };
-
-          // Mark acknowledged (sent to charger socket)
-          await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SERVICE_KEY,
-              'Authorization': 'Bearer ' + SERVICE_KEY,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: JSON.stringify({ status: 'acknowledged', acknowledged_at: new Date().toISOString() }),
-          });
-        } catch (sendErr) {
-          await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SERVICE_KEY,
-              'Authorization': 'Bearer ' + SERVICE_KEY,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: JSON.stringify({
-              status: 'failed',
-              completed_at: new Date().toISOString(),
-              result: { error: 'Failed to send over WebSocket', detail: String(sendErr) },
-            }),
-          });
+        if (cmd.command === 'stop') {
+          // STOP ESCALATION SEQUENCE: fire all three methods rapidly
+          await handleStopEscalation(server, cmd, dev?.active_transaction_id, outboundCommands);
+        } else {
+          const ocppMsg = mapCommandToOcpp(cmd, dev?.active_transaction_id);
+          if (!ocppMsg) {
+            await patchCommand(cmd.id, 'failed', { error: 'Unable to build OCPP command payload' });
+            continue;
+          }
+          try {
+            server.send(JSON.stringify(ocppMsg));
+            const commandUid = ocppMsg[1];
+            outboundCommands[commandUid] = { commandId: cmd.id, command: cmd.command };
+            await patchCommand(cmd.id, 'acknowledged');
+          } catch (sendErr) {
+            await patchCommand(cmd.id, 'failed', { error: 'WebSocket send failed', detail: String(sendErr) });
+          }
         }
       }
     } catch (e) {
       console.error('Command poll error:', e);
     }
-  }, 10000);
+  }, 5000);
 
   server.addEventListener('close', () => {
     clearInterval(commandPollInterval);
@@ -336,7 +311,106 @@ async function handleWebSocket(request) {
   return new Response(null, { status: 101, webSocket: client, headers: responseHeaders });
 }
 
-// Track active transaction IDs per device in-memory for low-latency lookup
+// Helper to patch a command status
+async function patchCommand(cmdId, status, result = null) {
+  const body = { status, completed_at: new Date().toISOString() };
+  if (status === 'acknowledged') {
+    delete body.completed_at;
+    body.acknowledged_at = new Date().toISOString();
+  }
+  if (result) body.result = result;
+  await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmdId, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SERVICE_KEY,
+      'Authorization': 'Bearer ' + SERVICE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+// STOP ESCALATION: fire RemoteStopTransaction, then 0A profile, then Soft Reset
+// in rapid succession (1s apart). At least one should stick.
+async function handleStopEscalation(server, cmd, persistedTransactionId, outboundCommands) {
+  const methods = [];
+  const txId = normalizeTransactionId(cmd.payload?.transactionId)
+    || normalizeTransactionId(activeTransactions[cmd.device_id])
+    || normalizeTransactionId(persistedTransactionId);
+
+  // Method 1: RemoteStopTransaction (if we have a valid txId)
+  if (txId) {
+    methods.push({
+      uid: 'stop1-' + cmd.id.substring(0, 6),
+      msg: [2, 'stop1-' + cmd.id.substring(0, 6), 'RemoteStopTransaction', { transactionId: txId }],
+      label: 'RemoteStopTransaction',
+    });
+  }
+
+  // Method 2: SetChargingProfile to 0A
+  methods.push({
+    uid: 'stop2-' + cmd.id.substring(0, 6),
+    msg: [2, 'stop2-' + cmd.id.substring(0, 6), 'SetChargingProfile', {
+      connectorId: 1,
+      csChargingProfiles: {
+        chargingProfileId: 1,
+        stackLevel: 0,
+        chargingProfilePurpose: 'TxDefaultProfile',
+        chargingProfileKind: 'Absolute',
+        chargingSchedule: {
+          chargingRateUnit: 'A',
+          chargingSchedulePeriod: [{ startPeriod: 0, limit: 0 }],
+        },
+      },
+    }],
+    label: 'SetChargingProfile(0A)',
+  });
+
+  // Method 3: Soft Reset
+  methods.push({
+    uid: 'stop3-' + cmd.id.substring(0, 6),
+    msg: [2, 'stop3-' + cmd.id.substring(0, 6), 'Reset', { type: 'Soft' }],
+    label: 'Reset(Soft)',
+  });
+
+  // Mark command as acknowledged
+  await patchCommand(cmd.id, 'acknowledged');
+
+  // Fire all methods with 1s spacing
+  const results = [];
+  for (let i = 0; i < methods.length; i++) {
+    const m = methods[i];
+    try {
+      outboundCommands[m.uid] = { commandId: cmd.id, command: 'stop', label: m.label };
+      server.send(JSON.stringify(m.msg));
+      results.push({ method: m.label, sent: true });
+      console.log('STOP escalation sent: ' + m.label + ' for device ' + cmd.device_id);
+    } catch (e) {
+      results.push({ method: m.label, sent: false, error: String(e) });
+    }
+    // Wait 1s between methods to give charger time to process
+    if (i < methods.length - 1) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  // Update command with the escalation results
+  await fetch(SUPABASE_URL + '/rest/v1/device_commands?id=eq.' + cmd.id, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SERVICE_KEY,
+      'Authorization': 'Bearer ' + SERVICE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify({
+      result: { escalation: results },
+    }),
+  });
+}
+
+// Track active transaction IDs per device in-memory
 const activeTransactions = {};
 
 function normalizeTransactionId(value) {
@@ -346,7 +420,6 @@ function normalizeTransactionId(value) {
 }
 
 function nextTransactionId() {
-  // Keep IDs within signed 32-bit range for broad firmware compatibility
   return Math.floor(Date.now() / 1000);
 }
 
@@ -355,20 +428,6 @@ function mapCommandToOcpp(cmd, persistedTransactionId = null) {
   switch (cmd.command) {
     case 'start':
       return [2, uid, 'RemoteStartTransaction', { connectorId: 1, idTag: 'juiceninja' }];
-    case 'stop': {
-      const txId =
-        normalizeTransactionId(cmd.payload?.transactionId) ||
-        normalizeTransactionId(activeTransactions[cmd.device_id]) ||
-        normalizeTransactionId(persistedTransactionId);
-
-      if (txId) {
-        return [2, uid, 'RemoteStopTransaction', { transactionId: txId }];
-      }
-
-      // Fallback when transactionId is unknown/invalid: request a soft reset,
-      // which most chargers apply immediately and stops active charging.
-      return [2, uid, 'Reset', { type: 'Soft' }];
-    }
     case 'set_current': {
       const limit = cmd.payload?.amps || 32;
       return [2, uid, 'SetChargingProfile', {
