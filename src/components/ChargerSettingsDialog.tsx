@@ -387,9 +387,9 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
                   <p className="text-xs text-muted-foreground">Telemetry and control share the same WebSocket connection.</p>
                   <div className="flex gap-2">
                     <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">
-                      {`ws://${webhookUrl.replace(/^https?:\/\//, "")}/${device.id}`}
+                      {ocppUrl}
                     </code>
-                    <CopyButton text={`ws://${webhookUrl.replace(/^https?:\/\//, "")}/${device.id}`} field="ocpp-ws" />
+                    <CopyButton text={ocppUrl} field="ocpp-ws" />
                   </div>
                 </div>
               ) : (
