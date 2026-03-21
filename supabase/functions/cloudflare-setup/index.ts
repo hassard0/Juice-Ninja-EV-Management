@@ -427,7 +427,7 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
     }
 
     case 'StartTransaction': {
-      const txId = Date.now();
+      const txId = nextTransactionId();
       activeTransactions[deviceId] = txId;
       await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
         method: 'PATCH',
