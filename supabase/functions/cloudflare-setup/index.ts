@@ -147,6 +147,11 @@ async function handleWebSocket(request) {
   server.accept();
 
   const outboundCommands = {};
+  let lastRxAt = Date.now();
+  let lastStatusRequestAt = 0;
+  let lastMeterRequestAt = 0;
+  let lastMeterRxAt = 0;
+  let isDisconnected = false;
 
   server.addEventListener('message', async (event) => {
     try {
