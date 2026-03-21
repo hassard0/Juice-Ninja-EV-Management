@@ -182,6 +182,8 @@ async function handleWebSocket(request) {
 
       if (messageType === 2) {
         // CALL from charger
+        if (action === 'StatusNotification') lastStatusRequestAt = Date.now();
+        if (action === 'MeterValues') lastMeterRxAt = Date.now();
         await handleOcppCall(server, resolvedDeviceId, device.api_key, uniqueId, action, payload);
       } else if (messageType === 3) {
         // CALLRESULT - charger responding to our command
