@@ -193,7 +193,8 @@ async function handleWebSocket(request) {
     }
   }, 30000);
 
-  // Poll for pending commands every 10 seconds and keep device alive
+  // Poll for pending commands every 10 seconds, keep device alive,
+  // and request fresh telemetry when a vehicle is connected
   const commandPollInterval = setInterval(async () => {
     try {
       // Update device timestamp to keep it "online" even between charger heartbeats
@@ -207,6 +208,21 @@ async function handleWebSocket(request) {
         },
         body: JSON.stringify({ updated_at: new Date().toISOString() }),
       });
+
+      // Check if vehicle is connected — if so, request fresh telemetry
+      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=vehicle_connected,charging_status', {
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': 'Bearer ' + SERVICE_KEY,
+        },
+      });
+      const devData = await devRes.json();
+      const dev = devData && devData[0];
+      if (dev && (dev.vehicle_connected || (dev.charging_status && dev.charging_status !== 'idle' && dev.charging_status !== 'unknown'))) {
+        // Request MeterValues and StatusNotification from the charger
+        server.send(JSON.stringify([2, 'tv-' + Date.now(), 'TriggerMessage', { requestedMessage: 'MeterValues' }]));
+        server.send(JSON.stringify([2, 'ts-' + Date.now(), 'TriggerMessage', { requestedMessage: 'StatusNotification' }]));
+      }
 
       const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at', {
         headers: {
