@@ -264,9 +264,9 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
   const [regenerating, setRegenerating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const webhookUrl = `https://${projectId}.supabase.co/functions/v1/telemetry-webhook`;
-  const commandsUrl = `https://${projectId}.supabase.co/functions/v1/device-commands`;
+  const webhookUrl = `https://api.juice.ninja/functions/v1/telemetry-webhook`;
+  const commandsUrl = `https://api.juice.ninja/functions/v1/device-commands`;
+  const ocppUrl = `wss://ocpp.juice.ninja/${device.id}`;
 
   const guide = getFirmwareGuide(device.firmware_type, webhookUrl, commandsUrl, device.id, device.api_key || "");
   const isOcppFirmware = ["ocpp", "wallbox", "grizzle"].includes(device.firmware_type || "");
