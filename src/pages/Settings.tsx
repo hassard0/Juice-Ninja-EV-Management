@@ -226,7 +226,7 @@ export default function Settings() {
                     <div>
                       <span className="font-medium text-sm">{tariff.name}</span>
                       <p className="text-xs text-muted-foreground tabular-nums">
-                        {formatTime(tariff.start_time, timeFormat as "12h" | "24h")} — {formatTime(tariff.end_time, timeFormat as "12h" | "24h")}
+                        {formatTime(tariff.start_time, timeFormat)} — {formatTime(tariff.end_time, timeFormat)}
                       </p>
                     </div>
                     {tariff.is_default && <Badge variant="secondary" className="text-xs">Default</Badge>}
