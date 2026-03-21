@@ -160,6 +160,27 @@ async function handleWebSocket(request) {
   let lastDeviceTouchAt = 0;
   let isDisconnected = false;
 
+  // Restore session state from DB on reconnect — seed lastMeasuredAmps from latest telemetry
+  // and activeTransactions from the persisted active_transaction_id so crash recovery is instant
+  try {
+    const seedRes = await fetch(SUPABASE_URL + '/rest/v1/telemetry?device_id=eq.' + resolvedDeviceId + '&order=recorded_at.desc&limit=1&select=amps', {
+      headers: { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + SERVICE_KEY },
+    });
+    const seedData = await seedRes.json();
+    if (seedData && seedData[0] && typeof seedData[0].amps === 'number') {
+      lastMeasuredAmps = seedData[0].amps;
+    }
+    const devSeedRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id', {
+      headers: { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + SERVICE_KEY },
+    });
+    const devSeedData = await devSeedRes.json();
+    const seedTxId = normalizeTransactionId(devSeedData?.[0]?.active_transaction_id);
+    if (seedTxId) activeTransactions[resolvedDeviceId] = seedTxId;
+    console.log('Restored state for ' + resolvedDeviceId + ': txId=' + seedTxId + ' amps=' + lastMeasuredAmps);
+  } catch (e) {
+    console.error('State restore on connect failed:', e);
+  }
+
   const touchDevice = async (extra = {}, force = false) => {
     const now = Date.now();
     const onlyHeartbeatTouch = Object.keys(extra).length === 0;
