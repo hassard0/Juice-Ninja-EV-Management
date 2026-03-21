@@ -183,18 +183,10 @@ async function handleWebSocket(request) {
     }
   });
 
-  // Send WebSocket ping every 30s to prevent Cloudflare from dropping the connection
-  const pingInterval = setInterval(() => {
-    try {
-      server.send(JSON.stringify([2, 'ping-' + Date.now(), 'TriggerMessage', { requestedMessage: 'Heartbeat' }]));
-    } catch (e) {
-      // Socket already closed
-      clearInterval(pingInterval);
-    }
-  }, 30000);
-
   // Poll for pending commands every 10 seconds, keep device alive,
-  // and request fresh telemetry when a vehicle is connected
+  // and request fresh telemetry when a vehicle is connected.
+  // We intentionally avoid synthetic TriggerMessage(Heartbeat) pings because
+  // some firmware rejects unsolicited OCPP calls and drops the socket.
   const commandPollInterval = setInterval(async () => {
     try {
       // Update device timestamp to keep it "online" even between charger heartbeats
@@ -271,12 +263,10 @@ async function handleWebSocket(request) {
 
   server.addEventListener('close', () => {
     clearInterval(commandPollInterval);
-    clearInterval(pingInterval);
   });
 
   server.addEventListener('error', () => {
     clearInterval(commandPollInterval);
-    clearInterval(pingInterval);
   });
 
   const responseHeaders = selectedProtocol ? { 'Sec-WebSocket-Protocol': selectedProtocol } : undefined;
