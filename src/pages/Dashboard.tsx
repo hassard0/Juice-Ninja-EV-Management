@@ -24,6 +24,7 @@ const statusColor: Record<string, string> = {
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useAdmin();
 
   const { data: devices = [], refetch } = useQuery({
     queryKey: ["devices"],
