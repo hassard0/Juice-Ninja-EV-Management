@@ -110,11 +110,11 @@ export default function Dashboard() {
   }, [latestTelemetry]);
 
   const getDeviceStatus = (device: Device): "charging" | "idle" | "offline" => {
+    const lastSeen = new Date(device.updated_at).getTime();
+    const age = Date.now() - lastSeen;
+    if (age > 3 * 60 * 1000) return "offline";
     const tele = telemetryByDevice[device.id];
-    if (!tele) return "offline";
-    const age = Date.now() - new Date(tele.recorded_at).getTime();
-    if (age > 5 * 60 * 1000) return "offline"; // >5 min = offline
-    if ((tele.amps ?? 0) > 1) return "charging";
+    if ((tele?.amps ?? 0) > 1) return "charging";
     return "idle";
   };
 

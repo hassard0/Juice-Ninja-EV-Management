@@ -102,7 +102,8 @@ export default function DeviceDetail() {
 
   // Latest telemetry values
   const latest = rawTelemetry.length > 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
-  const latestAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
+  // Use device.updated_at (set by OCPP bridge on every heartbeat/message) for online status
+  const latestAge = device ? Date.now() - new Date(device.updated_at).getTime() : Infinity;
 
   const handleAddSchedule = async () => {
     if (!device || !user) return;
