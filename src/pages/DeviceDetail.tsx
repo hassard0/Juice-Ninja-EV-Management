@@ -373,11 +373,11 @@ export default function DeviceDetail() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Start time · {formatTime(newStartTime, timeFormat)}</Label>
-                  <Input type="time" lang={timeInputLang} value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)} />
+                  <TimeField value={newStartTime} format={timeFormat} onChange={setNewStartTime} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">End time · {formatTime(newEndTime, timeFormat)}</Label>
-                  <Input type="time" lang={timeInputLang} value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)} />
+                  <TimeField value={newEndTime} format={timeFormat} onChange={setNewEndTime} />
                 </div>
               </div>
               <div className="space-y-1">
