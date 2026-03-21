@@ -128,12 +128,13 @@ export default function Dashboard() {
     const voltage = tele?.voltage ?? 0;
     const wh = tele?.wh ?? 0;
     const temperature = tele?.temperature ?? null;
+    const teleAge = tele ? Date.now() - new Date(tele.recorded_at).getTime() : Infinity;
     return {
-      amps,
-      voltage,
-      power_kw: (amps * voltage) / 1000,
+      amps: teleAge < 2 * 60 * 1000 ? amps : 0,
+      voltage: teleAge < 2 * 60 * 1000 ? voltage : 0,
+      power_kw: teleAge < 2 * 60 * 1000 ? (amps * voltage) / 1000 : 0,
       session_kwh: wh / 1000,
-      temperature,
+      temperature: teleAge < 2 * 60 * 1000 ? temperature : null,
     };
   };
 
