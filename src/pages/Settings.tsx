@@ -241,21 +241,11 @@ export default function Settings() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Start · {formatTime(tariff.start_time, timeFormat)}</Label>
-                    <Input
-                      type="time"
-                      lang={timeInputLang}
-                      value={tariff.start_time.slice(0, 5)}
-                      onChange={(e) => handleUpdateTariff(tariff, "start_time", e.target.value)}
-                    />
+                    <TimeField value={tariff.start_time} format={timeFormat} onChange={(value) => handleUpdateTariff(tariff, "start_time", value)} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">End · {formatTime(tariff.end_time, timeFormat)}</Label>
-                    <Input
-                      type="time"
-                      lang={timeInputLang}
-                      value={tariff.end_time.slice(0, 5)}
-                      onChange={(e) => handleUpdateTariff(tariff, "end_time", e.target.value)}
-                    />
+                    <TimeField value={tariff.end_time} format={timeFormat} onChange={(value) => handleUpdateTariff(tariff, "end_time", value)} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Cost ({currencyObj?.symbol}/kWh)</Label>
