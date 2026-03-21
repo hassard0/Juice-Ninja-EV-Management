@@ -5,6 +5,7 @@ import { formatTime } from "@/lib/time";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import TimeField from "@/components/TimeField";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,7 +43,7 @@ export default function Settings() {
   const [newStart, setNewStart] = useState("00:00");
   const [newEnd, setNewEnd] = useState("07:00");
   const [newCost, setNewCost] = useState("0.10");
-  const timeInputLang = timeFormat === "12h" ? "en-US" : "en-GB";
+  
 
   useEffect(() => {
     if (!user) return;
@@ -240,21 +241,11 @@ export default function Settings() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Start · {formatTime(tariff.start_time, timeFormat)}</Label>
-                    <Input
-                      type="time"
-                      lang={timeInputLang}
-                      value={tariff.start_time.slice(0, 5)}
-                      onChange={(e) => handleUpdateTariff(tariff, "start_time", e.target.value)}
-                    />
+                    <TimeField value={tariff.start_time} format={timeFormat} onChange={(value) => handleUpdateTariff(tariff, "start_time", value)} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">End · {formatTime(tariff.end_time, timeFormat)}</Label>
-                    <Input
-                      type="time"
-                      lang={timeInputLang}
-                      value={tariff.end_time.slice(0, 5)}
-                      onChange={(e) => handleUpdateTariff(tariff, "end_time", e.target.value)}
-                    />
+                    <TimeField value={tariff.end_time} format={timeFormat} onChange={(value) => handleUpdateTariff(tariff, "end_time", value)} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Cost ({currencyObj?.symbol}/kWh)</Label>
@@ -280,11 +271,11 @@ export default function Settings() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Start · {formatTime(newStart, timeFormat)}</Label>
-                    <Input type="time" lang={timeInputLang} value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+                    <TimeField value={newStart} format={timeFormat} onChange={setNewStart} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">End · {formatTime(newEnd, timeFormat)}</Label>
-                    <Input type="time" lang={timeInputLang} value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
+                    <TimeField value={newEnd} format={timeFormat} onChange={setNewEnd} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Cost ({currencyObj?.symbol}/kWh)</Label>

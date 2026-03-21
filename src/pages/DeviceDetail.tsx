@@ -7,6 +7,7 @@ import { formatTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import TimeField from "@/components/TimeField";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -34,7 +35,7 @@ export default function DeviceDetail() {
   const [newStartTime, setNewStartTime] = useState("23:00");
   const [newEndTime, setNewEndTime] = useState("07:00");
   const [newDays, setNewDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const timeInputLang = timeFormat === "12h" ? "en-US" : "en-GB";
+  
 
   // Chart date navigation — offset in days from today (0 = today, -1 = yesterday, etc.)
   const [chartDayOffset, setChartDayOffset] = useState(0);
@@ -372,11 +373,11 @@ export default function DeviceDetail() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Start time · {formatTime(newStartTime, timeFormat)}</Label>
-                  <Input type="time" lang={timeInputLang} value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)} />
+                  <TimeField value={newStartTime} format={timeFormat} onChange={setNewStartTime} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">End time · {formatTime(newEndTime, timeFormat)}</Label>
-                  <Input type="time" lang={timeInputLang} value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)} />
+                  <TimeField value={newEndTime} format={timeFormat} onChange={setNewEndTime} />
                 </div>
               </div>
               <div className="space-y-1">
