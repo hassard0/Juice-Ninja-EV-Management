@@ -281,6 +281,7 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
   const [firmwareType, setFirmwareType] = useState(device.firmware_type || "");
   const [location, setLocation] = useState(device.url || "");
   const [timezone, setTimezone] = useState((device as any).timezone || "America/New_York");
+  const [maxAmps, setMaxAmps] = useState((device as any).max_amps ?? 40);
   const [defaultAmps, setDefaultAmps] = useState((device as any).default_amps ?? 32);
   const [autoStart, setAutoStart] = useState((device as any).auto_start ?? false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
