@@ -278,23 +278,23 @@ export default function DeviceDetail() {
 
         {/* Telemetry charts with date navigation */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Telemetry</h2>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoBack} onClick={() => setChartDayOffset((o) => o - 1)}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-medium tabular-nums min-w-[100px] text-center">{chartDateLabel}</span>
-              <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoForward} onClick={() => setChartDayOffset((o) => o + 1)}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              {chartDayOffset !== 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setChartDayOffset(0)} className="text-xs">
-                  Today
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">Telemetry</h2>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoBack} onClick={() => setChartDayOffset((o) => o - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
-              )}
+                <span className="text-sm font-medium tabular-nums min-w-[100px] text-center">{chartDateLabel}</span>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoForward} onClick={() => setChartDayOffset((o) => o + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                {chartDayOffset !== 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setChartDayOffset(0)} className="text-xs">
+                    Today
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
 
           {telemetryByHour.length > 0 ? (
             <div className="grid lg:grid-cols-2 gap-6">
