@@ -68,6 +68,10 @@ const OCPP_BRIDGE_SCRIPT = `
 const SUPABASE_URL = 'SUPABASE_URL_PLACEHOLDER';
 const SERVICE_KEY = 'SERVICE_KEY_PLACEHOLDER';
 
+const STATUS_REQUEST_INTERVAL_MS = 30_000;
+const METER_REQUEST_INTERVAL_MS = 10_000;
+const SOCKET_STALE_RECONNECT_MS = 90_000;
+
 addEventListener('fetch', event => {
   if (event.request.headers.get('Upgrade') === 'websocket') {
     event.respondWith(handleWebSocket(event.request));
