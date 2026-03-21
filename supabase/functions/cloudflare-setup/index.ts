@@ -315,10 +315,10 @@ Deno.serve(async (req) => {
       }));
       apiFormData.append("worker.js", new Blob([apiScript], { type: "application/javascript+module" }), "worker.js");
       
-      // Use the simpler script upload API
+      // Use the simpler script upload API with correct Content-Type
       const apiWorkerRes = await fetch(`${CF_API}/accounts/${accountId}/workers/scripts/juice-ninja-api-proxy`, {
         method: "PUT",
-        headers: { "Authorization": `Bearer ${token}` },
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/javascript" },
         body: apiScript,
       });
       const apiWorkerData = await apiWorkerRes.json();
