@@ -348,7 +348,7 @@ export default function DeviceDetail() {
         <div className="flex flex-wrap gap-3">
           <Button
             className="active:scale-[0.97] transition-transform"
-            disabled={!isOnline || !vehicleConnected || isCharging}
+            disabled={!isOnline || !commandChannelReady || !vehicleConnected || isCharging}
             onClick={async () => {
               const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "start" });
               if (error) toast.error(error.message);
@@ -360,10 +360,10 @@ export default function DeviceDetail() {
           <Button
             variant="destructive"
             className="active:scale-[0.97] transition-transform"
-            disabled={!isOnline || !isCharging}
+            disabled={!isOnline || !commandChannelReady || !isCharging}
             onClick={async () => {
               const lastSeenMs = new Date(device.updated_at).getTime();
-              if (Date.now() - lastSeenMs > 45000) {
+              if (Date.now() - lastSeenMs > 90000) {
                 toast.error("Charger is disconnected — reconnect it, then try Stop again");
                 return;
               }
@@ -382,6 +382,9 @@ export default function DeviceDetail() {
           </Button>
           {!vehicleConnected && isOnline && (
             <p className="text-sm text-muted-foreground self-center ml-2">Plug in a vehicle to enable controls</p>
+          )}
+          {isOnline && !commandChannelReady && (
+            <p className="text-sm text-muted-foreground self-center ml-2">Reconnecting to charger… commands are paused</p>
           )}
         </div>
 
