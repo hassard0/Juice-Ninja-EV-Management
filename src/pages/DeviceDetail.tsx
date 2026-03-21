@@ -25,8 +25,6 @@ export default function DeviceDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [device, setDevice] = useState<Device | null>(null);
-  const [loading, setLoading] = useState(true);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [newStartTime, setNewStartTime] = useState("23:00");
