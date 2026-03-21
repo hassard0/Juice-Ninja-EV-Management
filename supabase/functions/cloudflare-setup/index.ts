@@ -276,9 +276,27 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
       server.send(JSON.stringify([3, uniqueId, { currentTime: new Date().toISOString() }]));
       break;
 
-    case 'StatusNotification':
+    case 'StatusNotification': {
+      // Track vehicle connection state from connector 1
+      const connectorStatus = payload.status;
+      const connectorId = payload.connectorId;
+      if (connectorId === 1 || connectorId === undefined) {
+        // Preparing, Charging, SuspendedEV, SuspendedEVSE, Finishing all indicate vehicle connected
+        const vehicleConnected = ['Preparing', 'Charging', 'SuspendedEV', 'SuspendedEVSE', 'Finishing'].includes(connectorStatus);
+        await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SERVICE_KEY,
+            'Authorization': 'Bearer ' + SERVICE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({ vehicle_connected: vehicleConnected }),
+        });
+      }
       server.send(JSON.stringify([3, uniqueId, {}]));
       break;
+    }
 
     case 'MeterValues':
       // Extract telemetry from OCPP MeterValues

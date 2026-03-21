@@ -61,36 +61,48 @@ export type Database = {
       devices: {
         Row: {
           api_key: string | null
+          auto_start: boolean
           created_at: string
+          default_amps: number
           firmware_type: string | null
           id: string
           name: string
           tenant_id: number
+          timezone: string
           updated_at: string
           url: string | null
           user_id: string
+          vehicle_connected: boolean
         }
         Insert: {
           api_key?: string | null
+          auto_start?: boolean
           created_at?: string
+          default_amps?: number
           firmware_type?: string | null
           id?: string
           name: string
           tenant_id?: number
+          timezone?: string
           updated_at?: string
           url?: string | null
           user_id: string
+          vehicle_connected?: boolean
         }
         Update: {
           api_key?: string | null
+          auto_start?: boolean
           created_at?: string
+          default_amps?: number
           firmware_type?: string | null
           id?: string
           name?: string
           tenant_id?: number
+          timezone?: string
           updated_at?: string
           url?: string | null
           user_id?: string
+          vehicle_connected?: boolean
         }
         Relationships: []
       }

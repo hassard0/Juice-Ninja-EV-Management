@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Settings, Save, Loader2, Trash2, Copy, Check, KeyRound, Wifi, RefreshCw, AlertTriangle, ExternalLink } from "lucide-react";
@@ -37,6 +38,23 @@ const FIRMWARE_OPTIONS = [
   { value: "emporia", label: "Emporia" },
   { value: "custom_http", label: "Custom HTTP" },
   { value: "other", label: "Other" },
+];
+
+const TIMEZONE_OPTIONS = [
+  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+  "America/Anchorage", "America/Phoenix", "America/Toronto", "America/Vancouver",
+  "America/Halifax", "America/St_Johns", "America/Edmonton", "America/Winnipeg",
+  "America/Regina", "America/Mexico_City", "America/Bogota", "America/Sao_Paulo",
+  "America/Argentina/Buenos_Aires",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Rome",
+  "Europe/Amsterdam", "Europe/Brussels", "Europe/Zurich", "Europe/Stockholm",
+  "Europe/Oslo", "Europe/Helsinki", "Europe/Warsaw", "Europe/Prague",
+  "Europe/Athens", "Europe/Bucharest", "Europe/Istanbul", "Europe/Moscow",
+  "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Hong_Kong",
+  "Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai", "Asia/Taipei",
+  "Australia/Sydney", "Australia/Melbourne", "Australia/Perth", "Australia/Brisbane",
+  "Pacific/Auckland", "Pacific/Fiji",
+  "Africa/Johannesburg", "Africa/Lagos", "Africa/Cairo",
 ];
 
 // Firmware-specific setup guides
@@ -260,6 +278,9 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
   const [name, setName] = useState(device.name);
   const [firmwareType, setFirmwareType] = useState(device.firmware_type || "");
   const [location, setLocation] = useState(device.url || "");
+  const [timezone, setTimezone] = useState((device as any).timezone || "America/New_York");
+  const [defaultAmps, setDefaultAmps] = useState((device as any).default_amps ?? 32);
+  const [autoStart, setAutoStart] = useState((device as any).auto_start ?? false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -289,7 +310,10 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
       name: trimmedName,
       firmware_type: firmwareType || null,
       url: location.trim() || null,
-    }).eq("id", device.id);
+      timezone,
+      default_amps: defaultAmps,
+      auto_start: autoStart,
+    } as any).eq("id", device.id);
     if (error) toast.error(error.message);
     else {
       toast.success("Charger updated");
@@ -487,19 +511,55 @@ Content-Type: application/json
                 <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Garage, Bay 3" maxLength={100} />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Firmware / protocol</Label>
-              <Select value={firmwareType} onValueChange={setFirmwareType}>
-                <SelectTrigger className="sm:w-1/2">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {FIRMWARE_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Firmware / protocol</Label>
+                <Select value={firmwareType} onValueChange={setFirmwareType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FIRMWARE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Timezone</Label>
+                <Select value={timezone} onValueChange={setTimezone}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select timezone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONE_OPTIONS.map((tz) => (
+                      <SelectItem key={tz} value={tz}>{tz.replace(/_/g, " ")}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-medium">Charging defaults</p>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Default amps</Label>
+                  <Input type="number" min={6} max={80} value={defaultAmps} onChange={(e) => setDefaultAmps(parseInt(e.target.value) || 32)} />
+                  <p className="text-xs text-muted-foreground">Charging current limit when a session starts</p>
+                </div>
+                <div className="space-y-2 flex flex-col justify-center">
+                  <div className="flex items-center gap-3">
+                    <Switch checked={autoStart} onCheckedChange={setAutoStart} />
+                    <div>
+                      <Label>Auto-start charging</Label>
+                      <p className="text-xs text-muted-foreground">Automatically start when a vehicle is plugged in</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <Button onClick={handleSave} disabled={saving} className="active:scale-[0.97] transition-transform">
               {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
               Save changes
