@@ -102,6 +102,9 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
   };
 
   const handleClose = (isOpen: boolean) => {
+    if (!isOpen && step === "credentials") {
+      onAdded(); // Refresh device list only after user has seen credentials
+    }
     setOpen(isOpen);
     if (!isOpen) resetForm();
   };
