@@ -34,6 +34,7 @@ export default function DeviceDetail() {
   const [newStartTime, setNewStartTime] = useState("23:00");
   const [newEndTime, setNewEndTime] = useState("07:00");
   const [newDays, setNewDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const timeInputLang = timeFormat === "12h" ? "en-US" : "en-GB";
 
   // Chart date navigation — offset in days from today (0 = today, -1 = yesterday, etc.)
   const [chartDayOffset, setChartDayOffset] = useState(0);
@@ -370,12 +371,12 @@ export default function DeviceDetail() {
               <p className="text-sm font-medium">Add schedule</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Start time</Label>
-                  <Input type="time" value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)} />
+                  <Label className="text-xs">Start time · {formatTime(newStartTime, timeFormat)}</Label>
+                  <Input type="time" lang={timeInputLang} value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">End time</Label>
-                  <Input type="time" value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)} />
+                  <Label className="text-xs">End time · {formatTime(newEndTime, timeFormat)}</Label>
+                  <Input type="time" lang={timeInputLang} value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)} />
                 </div>
               </div>
               <div className="space-y-1">

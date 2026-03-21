@@ -36,12 +36,13 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [currency, setCurrency] = useState("GBP");
-  const [timeFormat, setTimeFormat] = useState("24h");
+  const [timeFormat, setTimeFormat] = useState<"24h" | "12h">("24h");
   const [addingTariff, setAddingTariff] = useState(false);
   const [newName, setNewName] = useState("");
   const [newStart, setNewStart] = useState("00:00");
   const [newEnd, setNewEnd] = useState("07:00");
   const [newCost, setNewCost] = useState("0.10");
+  const timeInputLang = timeFormat === "12h" ? "en-US" : "en-GB";
 
   useEffect(() => {
     if (!user) return;
@@ -53,7 +54,7 @@ export default function Settings() {
       if (settingsRes.data) {
         setSettings(settingsRes.data);
         setCurrency(settingsRes.data.currency);
-        setTimeFormat(settingsRes.data.time_format || "24h");
+        setTimeFormat(settingsRes.data.time_format === "12h" ? "12h" : "24h");
       }
       if (tariffsRes.data) setTariffs(tariffsRes.data);
       setLoading(false);
@@ -192,7 +193,7 @@ export default function Settings() {
               </div>
               <div className="space-y-2">
                 <Label>Time format</Label>
-                <Select value={timeFormat} onValueChange={setTimeFormat}>
+                <Select value={timeFormat} onValueChange={(value) => setTimeFormat(value === "12h" ? "12h" : "24h")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -225,7 +226,7 @@ export default function Settings() {
                     <div>
                       <span className="font-medium text-sm">{tariff.name}</span>
                       <p className="text-xs text-muted-foreground tabular-nums">
-                        {formatTime(tariff.start_time, timeFormat as "12h" | "24h")} — {formatTime(tariff.end_time, timeFormat as "12h" | "24h")}
+                        {formatTime(tariff.start_time, timeFormat)} — {formatTime(tariff.end_time, timeFormat)}
                       </p>
                     </div>
                     {tariff.is_default && <Badge variant="secondary" className="text-xs">Default</Badge>}
@@ -238,17 +239,19 @@ export default function Settings() {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Start</Label>
+                    <Label className="text-xs">Start · {formatTime(tariff.start_time, timeFormat)}</Label>
                     <Input
                       type="time"
+                      lang={timeInputLang}
                       value={tariff.start_time.slice(0, 5)}
                       onChange={(e) => handleUpdateTariff(tariff, "start_time", e.target.value)}
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">End</Label>
+                    <Label className="text-xs">End · {formatTime(tariff.end_time, timeFormat)}</Label>
                     <Input
                       type="time"
+                      lang={timeInputLang}
                       value={tariff.end_time.slice(0, 5)}
                       onChange={(e) => handleUpdateTariff(tariff, "end_time", e.target.value)}
                     />
@@ -276,12 +279,12 @@ export default function Settings() {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Start</Label>
-                    <Input type="time" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+                    <Label className="text-xs">Start · {formatTime(newStart, timeFormat)}</Label>
+                    <Input type="time" lang={timeInputLang} value={newStart} onChange={(e) => setNewStart(e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">End</Label>
-                    <Input type="time" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
+                    <Label className="text-xs">End · {formatTime(newEnd, timeFormat)}</Label>
+                    <Input type="time" lang={timeInputLang} value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Cost ({currencyObj?.symbol}/kWh)</Label>
