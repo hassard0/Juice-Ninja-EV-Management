@@ -128,14 +128,12 @@ export default function Dashboard() {
     const tele = telemetryByDevice[device.id];
     const amps = tele?.amps ?? 0;
     const voltage = tele?.voltage ?? 0;
-    const wh = tele?.wh ?? 0;
     const temperature = tele?.temperature ?? null;
     const teleAge = tele ? Date.now() - new Date(tele.recorded_at).getTime() : Infinity;
     return {
       amps: teleAge < TELEMETRY_FRESH_MS ? amps : 0,
       voltage: teleAge < TELEMETRY_FRESH_MS ? voltage : 0,
       power_kw: teleAge < TELEMETRY_FRESH_MS ? (amps * voltage) / 1000 : 0,
-      session_kwh: wh / 1000,
       temperature: teleAge < TELEMETRY_FRESH_MS ? temperature : null,
     };
   };
@@ -143,8 +141,24 @@ export default function Dashboard() {
   const sym = userSettings?.currency_symbol || "£";
   const defaultRate = tariffs.find((t) => t.is_default)?.cost_per_kwh || tariffs[0]?.cost_per_kwh || 0.25;
 
+  // Compute daily energy per device as delta between first and last wh reading
+  const dailyEnergyByDevice = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const device of devices) {
+      const readings = latestTelemetry
+        .filter((t) => t.device_id === device.id && t.wh != null)
+        .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
+      if (readings.length >= 2) {
+        map[device.id] = Math.max(0, (readings[readings.length - 1].wh! - readings[0].wh!)) / 1000;
+      } else {
+        map[device.id] = 0;
+      }
+    }
+    return map;
+  }, [devices, latestTelemetry]);
+
   const activeCount = devices.filter((d) => getDeviceStatus(d) === "charging").length;
-  const totalKwhToday = devices.reduce((sum, d) => sum + getDeviceTelemetry(d).session_kwh, 0);
+  const totalKwhToday = Object.values(dailyEnergyByDevice).reduce((sum, kwh) => sum + kwh, 0);
   const totalCostToday = totalKwhToday * defaultRate;
 
   const handleStartStop = async (device: Device) => {
