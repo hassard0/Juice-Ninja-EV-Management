@@ -12,7 +12,7 @@ import { BatteryCharging, ArrowLeft, Zap, Activity, Thermometer, Wifi, WifiOff, 
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LineChart, Line } from "recharts";
 import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
