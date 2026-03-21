@@ -298,7 +298,7 @@ export default function DeviceDetail() {
             onClick={async () => {
               const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "start" });
               if (error) toast.error(error.message);
-              else toast.success("Start command queued — charger will pick it up on next poll");
+              else toast.success("Start command sent to charger");
             }}
           >
             <Play className="h-4 w-4 mr-1" /> Start charging
@@ -310,7 +310,7 @@ export default function DeviceDetail() {
             onClick={async () => {
               const { error } = await supabase.from("device_commands").insert({ device_id: device.id, command: "stop" });
               if (error) toast.error(error.message);
-              else toast.success("Stop command queued — charger will pick it up on next poll");
+              else toast.success("Stop command sent to charger");
             }}
           >
             <Square className="h-4 w-4 mr-1" /> Stop charging
