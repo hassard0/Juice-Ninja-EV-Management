@@ -1,10 +1,11 @@
 import { useMemo } from "react";
+import { useAdmin } from "@/hooks/useAdmin";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BatteryCharging, Zap, Activity, Thermometer, LogOut, Play, Square, BarChart3, Settings } from "lucide-react";
+import { BatteryCharging, Zap, Activity, Thermometer, LogOut, Play, Square, BarChart3, Settings, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ const statusColor: Record<string, string> = {
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useAdmin();
 
   const { data: devices = [], refetch } = useQuery({
     queryKey: ["devices"],
@@ -171,6 +173,11 @@ export default function Dashboard() {
             Juice Ninja
           </Link>
           <div className="flex items-center gap-3">
+            {isAdmin && (
+              <Button variant="ghost" size="icon" asChild title="Admin">
+                <Link to="/admin"><ShieldCheck className="h-4 w-4" /></Link>
+              </Button>
+            )}
             <Button variant="ghost" size="icon" asChild title="Settings">
               <Link to="/settings"><Settings className="h-4 w-4" /></Link>
             </Button>
