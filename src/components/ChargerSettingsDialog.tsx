@@ -99,7 +99,7 @@ function getFirmwareGuide(firmware: string | null, webhookUrl: string, commandsU
               "Access your charger's configuration interface (varies by manufacturer — check your manual for the admin panel URL or app).",
               "Find the OCPP settings section (sometimes labelled Network, Cloud, Backend, or Central System).",
               "Set the OCPP version/protocol to 1.6J (JSON over WebSocket).",
-              `Set the Central System URL (CSMS URL / WebSocket URL) to:\n  ws://${webhookUrl.replace(/^https?:\/\//, "")}/${deviceId}`,
+              `Set the Central System URL (CSMS URL / WebSocket URL) to:\n  wss://ocpp.juice.ninja/${deviceId}`,
               "Note: this is a single WebSocket endpoint — the charger handles telemetry reporting AND receives commands over the same connection.",
               `Set the Charge Point ID (Station Identity) to:\n  ${deviceId}`,
               `If your charger supports a CSMS password or authentication key, set it to:\n  ${truncKey}`,
