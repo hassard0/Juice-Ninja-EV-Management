@@ -270,17 +270,33 @@ async function handleWebSocket(request) {
 // Track active transaction IDs per device in-memory for low-latency lookup
 const activeTransactions = {};
 
+function normalizeTransactionId(value) {
+  const tx = Number(value);
+  if (!Number.isInteger(tx) || tx <= 0 || tx > 2147483647) return null;
+  return tx;
+}
+
+function nextTransactionId() {
+  // Keep IDs within signed 32-bit range for broad firmware compatibility
+  return Math.floor(Date.now() / 1000);
+}
+
 function mapCommandToOcpp(cmd, persistedTransactionId = null) {
   const uid = cmd.id.substring(0, 8);
   switch (cmd.command) {
     case 'start':
       return [2, uid, 'RemoteStartTransaction', { connectorId: 1, idTag: 'juiceninja' }];
     case 'stop': {
-      const txId = cmd.payload?.transactionId || activeTransactions[cmd.device_id] || persistedTransactionId || null;
+      const txId =
+        normalizeTransactionId(cmd.payload?.transactionId) ||
+        normalizeTransactionId(activeTransactions[cmd.device_id]) ||
+        normalizeTransactionId(persistedTransactionId);
+
       if (txId) {
         return [2, uid, 'RemoteStopTransaction', { transactionId: txId }];
       }
-      // Fallback when transactionId is unknown: request a soft reset,
+
+      // Fallback when transactionId is unknown/invalid: request a soft reset,
       // which most chargers apply immediately and stops active charging.
       return [2, uid, 'Reset', { type: 'Soft' }];
     }
@@ -411,7 +427,7 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
     }
 
     case 'StartTransaction': {
-      const txId = Date.now();
+      const txId = nextTransactionId();
       activeTransactions[deviceId] = txId;
       await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + deviceId, {
         method: 'PATCH',
