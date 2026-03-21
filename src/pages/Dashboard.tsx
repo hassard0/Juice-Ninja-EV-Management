@@ -131,6 +131,8 @@ export default function Dashboard() {
 
   const getDeviceStatus = (device: Device): "charging" | "idle" | "offline" => {
     if (!isDeviceOnline(device)) return "offline";
+    const chargingStatus = (device as any)?.charging_status as string | undefined;
+    if (chargingStatus === 'charging' || chargingStatus === 'suspended') return "charging";
     const tele = telemetryByDevice[device.id];
     // Only trust telemetry amps if the reading itself is recent (< 2 min)
     if (tele && (tele.amps ?? 0) > 1) {
