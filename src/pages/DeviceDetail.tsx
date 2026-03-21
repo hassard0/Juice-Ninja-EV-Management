@@ -215,7 +215,11 @@ export default function DeviceDetail() {
   const currentVoltage = latest?.voltage ?? 0;
   const currentTemp = latest?.temperature ?? null;
   const latestTeleAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
-  const isCharging = currentAmps > 1 && latestTeleAge < TELEMETRY_FRESH_MS;
+  const chargingStatus = (device as any)?.charging_status as string | undefined;
+  // Charger is "charging" if OCPP reports it OR if fresh telemetry shows current draw
+  const isCharging = chargingStatus === 'charging'
+    || chargingStatus === 'suspended'
+    || (currentAmps > 1 && latestTeleAge < TELEMETRY_FRESH_MS);
   const isOnline = isDeviceOnline(device);
 
   // Can go back up to 365 days
