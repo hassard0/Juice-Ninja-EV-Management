@@ -279,7 +279,7 @@ async function handleWebSocket(request) {
           // STOP ESCALATION SEQUENCE: fire all three methods rapidly
           await handleStopEscalation(server, cmd, dev?.active_transaction_id, outboundCommands);
         } else {
-          const ocppMsg = mapCommandToOcpp(cmd, dev?.active_transaction_id);
+          const ocppMsg = mapCommandToOcpp(cmd, dev?.active_transaction_id, dev?.default_amps);
           if (!ocppMsg) {
             await patchCommand(cmd.id, 'failed', { error: 'Unable to build OCPP command payload' });
             continue;
