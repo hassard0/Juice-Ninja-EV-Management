@@ -17,7 +17,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Toolti
 import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
-import { isDeviceOnline } from "@/lib/device-status";
+
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
 type Schedule = Database["public"]["Tables"]["schedules"]["Row"];
@@ -104,6 +104,25 @@ export default function DeviceDetail() {
     refetchInterval: chartDayOffset === 0 ? 30000 : false,
   });
 
+  // Latest telemetry is independent from chart day and drives live controls/status
+  const { data: latestTelemetry } = useQuery<Telemetry | null>({
+    queryKey: ["telemetry_device_latest", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data, error } = await supabase
+        .from("telemetry")
+        .select("*")
+        .eq("device_id", id)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+    refetchInterval: 10000,
+  });
+
   // Group telemetry by hour for charts
   const telemetryByHour = useMemo(() => {
     if (rawTelemetry.length === 0) return [];
@@ -154,7 +173,7 @@ export default function DeviceDetail() {
   }, [rawTelemetry]);
 
   // Latest telemetry values and session energy (delta between first and last wh reading of the day)
-  const latest = rawTelemetry.length > 0 && chartDayOffset === 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
+  const latest = latestTelemetry ?? null;
   const meterEnergyWh = useMemo(() => {
     const whValues = rawTelemetry.filter((t) => t.wh != null).map((t) => t.wh!);
     if (whValues.length < 2) return 0;
@@ -248,13 +267,14 @@ export default function DeviceDetail() {
   const currentVoltage = latest?.voltage ?? 0;
   const currentTemp = latest?.temperature ?? null;
   const latestTeleAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
-  // Control gating should follow fresh measured current to avoid stale/ghost charging states
+  // Control gating should follow fresh measured current + very fresh device heartbeat
   const CONTROL_TELEMETRY_FRESH_MS = 3 * 60 * 1000;
+  const COMMAND_CHANNEL_FRESH_MS = 45 * 1000;
   const hasFreshTelemetry = latestTeleAge < CONTROL_TELEMETRY_FRESH_MS;
   const hasLiveCurrent = hasFreshTelemetry && currentAmps > 1;
   const isCharging = hasLiveCurrent;
   const displayCharging = hasLiveCurrent;
-  const isOnline = isDeviceOnline(device);
+  const isOnline = Date.now() - new Date(device.updated_at).getTime() < COMMAND_CHANNEL_FRESH_MS;
 
   // Can go back up to 365 days
   const canGoBack = chartDayOffset > -365;

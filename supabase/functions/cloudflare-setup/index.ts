@@ -249,7 +249,7 @@ async function handleWebSocket(request) {
         body: JSON.stringify({ updated_at: new Date().toISOString() }),
       });
 
-      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status', {
+      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status,default_amps', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
@@ -279,7 +279,7 @@ async function handleWebSocket(request) {
           // STOP ESCALATION SEQUENCE: fire all three methods rapidly
           await handleStopEscalation(server, cmd, dev?.active_transaction_id, outboundCommands);
         } else {
-          const ocppMsg = mapCommandToOcpp(cmd, dev?.active_transaction_id);
+          const ocppMsg = mapCommandToOcpp(cmd, dev?.active_transaction_id, dev?.default_amps);
           if (!ocppMsg) {
             await patchCommand(cmd.id, 'failed', { error: 'Unable to build OCPP command payload' });
             continue;
@@ -423,11 +423,35 @@ function nextTransactionId() {
   return Math.floor(Date.now() / 1000);
 }
 
-function mapCommandToOcpp(cmd, persistedTransactionId = null) {
+function mapCommandToOcpp(cmd, persistedTransactionId = null, defaultAmps = 32) {
   const uid = cmd.id;
   switch (cmd.command) {
-    case 'start':
+    case 'start': {
+      const txId = normalizeTransactionId(cmd.payload?.transactionId)
+        || normalizeTransactionId(activeTransactions[cmd.device_id])
+        || normalizeTransactionId(persistedTransactionId);
+
+      // If a transaction already exists, resume by restoring a non-zero profile limit
+      // (RemoteStartTransaction is commonly rejected in this state).
+      if (txId) {
+        const limit = Math.max(6, Math.min(80, Number(cmd.payload?.amps ?? defaultAmps ?? 32)));
+        return [2, uid, 'SetChargingProfile', {
+          connectorId: 1,
+          csChargingProfiles: {
+            chargingProfileId: 1,
+            stackLevel: 0,
+            chargingProfilePurpose: 'TxDefaultProfile',
+            chargingProfileKind: 'Absolute',
+            chargingSchedule: {
+              chargingRateUnit: 'A',
+              chargingSchedulePeriod: [{ startPeriod: 0, limit }],
+            },
+          },
+        }];
+      }
+
       return [2, uid, 'RemoteStartTransaction', { connectorId: 1, idTag: 'juiceninja' }];
+    }
     case 'set_current': {
       const limit = cmd.payload?.amps || 32;
       return [2, uid, 'SetChargingProfile', {
