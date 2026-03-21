@@ -280,21 +280,9 @@ function mapCommandToOcpp(cmd, persistedTransactionId = null) {
       if (txId) {
         return [2, uid, 'RemoteStopTransaction', { transactionId: txId }];
       }
-      // Fallback for firmware that doesn't expose/stick transaction IDs:
-      // set charging profile limit to 0A to force output to stop.
-      return [2, uid, 'SetChargingProfile', {
-        connectorId: 1,
-        csChargingProfiles: {
-          chargingProfileId: 1,
-          stackLevel: 0,
-          chargingProfilePurpose: 'TxDefaultProfile',
-          chargingProfileKind: 'Absolute',
-          chargingSchedule: {
-            chargingRateUnit: 'A',
-            chargingSchedulePeriod: [{ startPeriod: 0, limit: 0 }],
-          },
-        },
-      }];
+      // Fallback when transactionId is unknown: request a soft reset,
+      // which most chargers apply immediately and stops active charging.
+      return [2, uid, 'Reset', { type: 'Soft' }];
     }
     case 'set_current': {
       const limit = cmd.payload?.amps || 32;
