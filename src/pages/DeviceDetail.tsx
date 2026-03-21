@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,25 +12,12 @@ import { BatteryCharging, ArrowLeft, Zap, Activity, Thermometer, Wifi, WifiOff, 
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LineChart, Line } from "recharts";
 import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
+import { useQuery } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
 type Schedule = Database["public"]["Tables"]["schedules"]["Row"];
-
-const generateMockTelemetry = () => {
-  const data = [];
-  for (let i = 23; i >= 0; i--) {
-    const charging = Math.random() > 0.4;
-    data.push({
-      hour: `${String(23 - i).padStart(2, "0")}:00`,
-      amps: charging ? 8 + Math.random() * 24 : 0,
-      voltage: 230 + Math.random() * 15,
-      kwh: charging ? 1.5 + Math.random() * 5 : 0,
-      temp: 18 + Math.random() * 20,
-    });
-  }
-  return data;
-};
+type Telemetry = Database["public"]["Tables"]["telemetry"]["Row"];
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -40,7 +27,6 @@ export default function DeviceDetail() {
   const navigate = useNavigate();
   const [device, setDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(true);
-  const [telemetry] = useState(generateMockTelemetry);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [newStartTime, setNewStartTime] = useState("23:00");
@@ -69,6 +55,54 @@ export default function DeviceDetail() {
     fetchDevice();
     fetchSchedules();
   }, [fetchDevice, fetchSchedules]);
+
+  // Fetch real telemetry for last 24h
+  const { data: rawTelemetry = [] } = useQuery<Telemetry[]>({
+    queryKey: ["telemetry_device_24h", id],
+    queryFn: async () => {
+      if (!id) return [];
+      const since = new Date();
+      since.setHours(since.getHours() - 24);
+      const { data, error } = await supabase
+        .from("telemetry")
+        .select("*")
+        .eq("device_id", id)
+        .gte("recorded_at", since.toISOString())
+        .order("recorded_at");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id,
+    refetchInterval: 30000,
+  });
+
+  // Group telemetry by hour for charts
+  const telemetryByHour = useMemo(() => {
+    if (rawTelemetry.length === 0) return [];
+    const hourMap: Record<string, { amps: number[]; voltage: number[]; wh: number[]; temp: number[] }> = {};
+    for (const t of rawTelemetry) {
+      const d = new Date(t.recorded_at);
+      const key = `${String(d.getHours()).padStart(2, "0")}:00`;
+      if (!hourMap[key]) hourMap[key] = { amps: [], voltage: [], wh: [], temp: [] };
+      if (t.amps != null) hourMap[key].amps.push(t.amps);
+      if (t.voltage != null) hourMap[key].voltage.push(t.voltage);
+      if (t.wh != null) hourMap[key].wh.push(t.wh);
+      if (t.temperature != null) hourMap[key].temp.push(t.temperature);
+    }
+    return Object.entries(hourMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([hour, vals]) => ({
+        hour,
+        amps: vals.amps.length ? vals.amps.reduce((a, b) => a + b, 0) / vals.amps.length : 0,
+        voltage: vals.voltage.length ? vals.voltage.reduce((a, b) => a + b, 0) / vals.voltage.length : 0,
+        kwh: vals.wh.length ? Math.max(...vals.wh) / 1000 : 0,
+        temp: vals.temp.length ? vals.temp.reduce((a, b) => a + b, 0) / vals.temp.length : 0,
+      }));
+  }, [rawTelemetry]);
+
+  // Latest telemetry values
+  const latest = rawTelemetry.length > 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
+  const latestAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
 
   const handleAddSchedule = async () => {
     if (!device || !user) return;
@@ -107,12 +141,12 @@ export default function DeviceDetail() {
     );
   }
 
-  const currentAmps = telemetry[telemetry.length - 1]?.amps ?? 0;
-  const currentVoltage = telemetry[telemetry.length - 1]?.voltage ?? 0;
-  const currentTemp = telemetry[telemetry.length - 1]?.temp ?? 0;
-  const totalKwh = telemetry.reduce((sum, t) => sum + t.kwh, 0);
+  const currentAmps = latest?.amps ?? 0;
+  const currentVoltage = latest?.voltage ?? 0;
+  const currentTemp = latest?.temperature ?? null;
+  const totalWh = latest?.wh ?? 0;
   const isCharging = currentAmps > 1;
-  const isOnline = true; // simulated
+  const isOnline = latestAge < 5 * 60 * 1000;
 
   return (
     <div className="min-h-screen bg-background">
@@ -151,8 +185,8 @@ export default function DeviceDetail() {
             { label: "Status", value: isCharging ? "Charging" : "Idle", icon: BatteryCharging },
             { label: "Current", value: `${currentAmps.toFixed(1)} A`, icon: Activity },
             { label: "Voltage", value: `${currentVoltage.toFixed(0)} V`, icon: Zap },
-            { label: "Temperature", value: `${currentTemp.toFixed(0)}°C`, icon: Thermometer },
-            { label: "Session total", value: `${totalKwh.toFixed(1)} kWh`, icon: Zap },
+            { label: "Temperature", value: currentTemp != null ? `${currentTemp.toFixed(0)}°C` : "—", icon: Thermometer },
+            { label: "Total energy", value: `${(totalWh / 1000).toFixed(1)} kWh`, icon: Zap },
           ].map((s) => (
             <Card key={s.label}>
               <CardContent className="p-4">
@@ -187,12 +221,13 @@ export default function DeviceDetail() {
         </div>
 
         {/* Telemetry charts */}
+        {telemetryByHour.length > 0 ? (
         <div className="grid lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader><CardTitle className="text-base">Energy (24h)</CardTitle></CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={telemetry} barSize={14}>
+                <BarChart data={telemetryByHour} barSize={14}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="hour" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} interval={3} />
                   <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} unit=" kWh" width={52} />
@@ -206,7 +241,7 @@ export default function DeviceDetail() {
             <CardHeader><CardTitle className="text-base">Current & voltage (24h)</CardTitle></CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={telemetry}>
+                <LineChart data={telemetryByHour}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="hour" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} interval={3} />
                   <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
@@ -218,6 +253,14 @@ export default function DeviceDetail() {
             </CardContent>
           </Card>
         </div>
+        ) : (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <Activity className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">No telemetry data in the last 24 hours. Charts will appear once the charger sends meter values.</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Schedules */}
         <Card>

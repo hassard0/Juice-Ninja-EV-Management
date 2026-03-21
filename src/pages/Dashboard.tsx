@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,29 +13,12 @@ import AddChargerDialog from "@/components/AddChargerDialog";
 import type { Database } from "@/integrations/supabase/types";
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
-
-const statusForDevice = (device: Device): "charging" | "idle" | "offline" | "scheduled" => {
-  const hash = device.id.charCodeAt(0) % 4;
-  return (["charging", "idle", "scheduled", "idle"] as const)[hash];
-};
+type Telemetry = Database["public"]["Tables"]["telemetry"]["Row"];
 
 const statusColor: Record<string, string> = {
   charging: "bg-primary text-primary-foreground",
   idle: "bg-muted text-muted-foreground",
   offline: "bg-destructive/15 text-destructive",
-  scheduled: "bg-accent text-accent-foreground",
-};
-
-const mockTelemetry = (device: Device) => {
-  const seed = device.id.charCodeAt(2);
-  const status = statusForDevice(device);
-  return {
-    amps: status === "charging" ? 8 + (seed % 24) : 0,
-    voltage: 230 + (seed % 15),
-    power_kw: status === "charging" ? ((8 + (seed % 24)) * (230 + (seed % 15))) / 1000 : 0,
-    session_kwh: status === "charging" ? 2 + (seed % 30) : 0,
-    temperature: 18 + (seed % 20),
-  };
 };
 
 export default function Dashboard() {
@@ -69,25 +53,41 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
-  // Query real telemetry for energy chart
-  const { data: telemetryData = [] } = useQuery({
-    queryKey: ["telemetry_weekly"],
+  // Fetch latest telemetry per device (last record for each)
+  const { data: latestTelemetry = [] } = useQuery<Telemetry[]>({
+    queryKey: ["telemetry_latest", devices.map((d) => d.id)],
+    queryFn: async () => {
+      if (!user || devices.length === 0) return [];
+      const deviceIds = devices.map((d) => d.id);
+      // Get last 1 telemetry row per device (fetch recent, dedupe client-side)
+      const { data, error } = await supabase
+        .from("telemetry")
+        .select("*")
+        .in("device_id", deviceIds)
+        .order("recorded_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && devices.length > 0,
+    refetchInterval: 30000,
+  });
+
+  // Fetch weekly telemetry for energy chart
+  const { data: weeklyTelemetry = [] } = useQuery({
+    queryKey: ["telemetry_weekly", devices.map((d) => d.id)],
     queryFn: async () => {
       if (!user || devices.length === 0) return [];
       const deviceIds = devices.map((d) => d.id);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
       const { data } = await supabase
         .from("telemetry")
         .select("wh, recorded_at")
         .in("device_id", deviceIds)
         .gte("recorded_at", sevenDaysAgo.toISOString())
         .order("recorded_at");
-
       if (!data || data.length === 0) return [];
-
-      // Group by day
       const dayMap: Record<string, number> = {};
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       data.forEach((row) => {
@@ -95,21 +95,53 @@ export default function Dashboard() {
         const key = dayNames[d.getDay()];
         dayMap[key] = (dayMap[key] || 0) + (row.wh || 0) / 1000;
       });
-
       return Object.entries(dayMap).map(([day, kwh]) => ({ day, kwh: parseFloat(kwh.toFixed(1)) }));
     },
     enabled: !!user && devices.length > 0,
   });
 
+  // Build a map of device_id -> latest telemetry
+  const telemetryByDevice = useMemo(() => {
+    const map: Record<string, Telemetry> = {};
+    for (const t of latestTelemetry) {
+      if (!map[t.device_id]) map[t.device_id] = t;
+    }
+    return map;
+  }, [latestTelemetry]);
+
+  const getDeviceStatus = (device: Device): "charging" | "idle" | "offline" => {
+    const tele = telemetryByDevice[device.id];
+    if (!tele) return "offline";
+    const age = Date.now() - new Date(tele.recorded_at).getTime();
+    if (age > 5 * 60 * 1000) return "offline"; // >5 min = offline
+    if ((tele.amps ?? 0) > 1) return "charging";
+    return "idle";
+  };
+
+  const getDeviceTelemetry = (device: Device) => {
+    const tele = telemetryByDevice[device.id];
+    const amps = tele?.amps ?? 0;
+    const voltage = tele?.voltage ?? 0;
+    const wh = tele?.wh ?? 0;
+    const temperature = tele?.temperature ?? null;
+    return {
+      amps,
+      voltage,
+      power_kw: (amps * voltage) / 1000,
+      session_kwh: wh / 1000,
+      temperature,
+    };
+  };
+
   const sym = userSettings?.currency_symbol || "£";
   const defaultRate = tariffs.find((t) => t.is_default)?.cost_per_kwh || tariffs[0]?.cost_per_kwh || 0.25;
 
-  const activeCount = devices.filter((d) => statusForDevice(d) === "charging").length;
-  const totalKwhToday = devices.reduce((sum, d) => sum + mockTelemetry(d).session_kwh, 0);
+  const activeCount = devices.filter((d) => getDeviceStatus(d) === "charging").length;
+  const totalKwhToday = devices.reduce((sum, d) => sum + getDeviceTelemetry(d).session_kwh, 0);
   const totalCostToday = totalKwhToday * defaultRate;
 
   const handleStartStop = async (device: Device) => {
-    const status = statusForDevice(device);
+    const status = getDeviceStatus(device);
     const command = status === "charging" ? "stop" : "start";
     const { error } = await supabase.from("device_commands").insert({
       device_id: device.id,
@@ -122,8 +154,7 @@ export default function Dashboard() {
     }
   };
 
-  // Use real telemetry if available, otherwise show nothing (no fake data)
-  const energyChartData = telemetryData;
+  const energyChartData = weeklyTelemetry;
 
   return (
     <div className="min-h-screen bg-background">
@@ -213,8 +244,8 @@ export default function Dashboard() {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {devices.map((device) => {
-                const status = statusForDevice(device);
-                const tele = mockTelemetry(device);
+                const status = getDeviceStatus(device);
+                const tele = getDeviceTelemetry(device);
                 return (
                   <Link to={`/device/${device.id}`} key={device.id} className="block">
                     <Card className="hover:shadow-md transition-shadow duration-300 h-full">
@@ -237,7 +268,7 @@ export default function Dashboard() {
                           </div>
                           <div className="flex items-center gap-1.5 text-muted-foreground">
                             <Thermometer className="h-3.5 w-3.5" />
-                            <span className="tabular-nums">{tele.temperature}°C</span>
+                            <span className="tabular-nums">{tele.temperature != null ? `${tele.temperature}°C` : "—"}</span>
                           </div>
                           <div className="flex items-center gap-1.5 text-muted-foreground">
                             <BatteryCharging className="h-3.5 w-3.5" />
