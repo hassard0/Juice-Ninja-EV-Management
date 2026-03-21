@@ -222,7 +222,12 @@ export default function Settings() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium text-sm">{tariff.name}</span>
+                    <div>
+                      <span className="font-medium text-sm">{tariff.name}</span>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {formatTime(tariff.start_time, timeFormat as "12h" | "24h")} — {formatTime(tariff.end_time, timeFormat as "12h" | "24h")}
+                      </p>
+                    </div>
                     {tariff.is_default && <Badge variant="secondary" className="text-xs">Default</Badge>}
                   </div>
                   {!tariff.is_default && (
