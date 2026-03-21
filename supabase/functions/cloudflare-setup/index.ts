@@ -68,6 +68,10 @@ const OCPP_BRIDGE_SCRIPT = `
 const SUPABASE_URL = 'SUPABASE_URL_PLACEHOLDER';
 const SERVICE_KEY = 'SERVICE_KEY_PLACEHOLDER';
 
+const STATUS_REQUEST_INTERVAL_MS = 30_000;
+const METER_REQUEST_INTERVAL_MS = 10_000;
+const SOCKET_STALE_RECONNECT_MS = 90_000;
+
 addEventListener('fetch', event => {
   if (event.request.headers.get('Upgrade') === 'websocket') {
     event.respondWith(handleWebSocket(event.request));
@@ -143,6 +147,11 @@ async function handleWebSocket(request) {
   server.accept();
 
   const outboundCommands = {};
+  let lastRxAt = Date.now();
+  let lastStatusRequestAt = 0;
+  let lastMeterRequestAt = 0;
+  let lastMeterRxAt = 0;
+  let isDisconnected = false;
 
   server.addEventListener('message', async (event) => {
     try {
@@ -157,6 +166,7 @@ async function handleWebSocket(request) {
               ? new TextDecoder().decode(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength))
               : String(raw);
       const msg = JSON.parse(text.trim());
+      lastRxAt = Date.now();
 
       // OCPP 1.6J message format: [MessageTypeId, UniqueId, Action, Payload]
       // or [MessageTypeId, UniqueId, Payload] for responses
@@ -172,6 +182,8 @@ async function handleWebSocket(request) {
 
       if (messageType === 2) {
         // CALL from charger
+        if (action === 'StatusNotification') lastStatusRequestAt = Date.now();
+        if (action === 'MeterValues') lastMeterRxAt = Date.now();
         await handleOcppCall(server, resolvedDeviceId, device.api_key, uniqueId, action, payload);
       } else if (messageType === 3) {
         // CALLRESULT - charger responding to our command
@@ -234,20 +246,18 @@ async function handleWebSocket(request) {
     }
   });
 
-  // Poll for pending commands every 5 seconds and keep device alive.
+  // Poll for pending commands every 5 seconds.
   const commandPollInterval = setInterval(async () => {
     try {
-      // Update device timestamp to keep it "online"
-      await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
-        method: 'PATCH',
-        headers: {
-          'apikey': SERVICE_KEY,
-          'Authorization': 'Bearer ' + SERVICE_KEY,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
-        body: JSON.stringify({ updated_at: new Date().toISOString() }),
-      });
+      const now = Date.now();
+
+      // If charger went silent while socket is still open, force reconnect to recover.
+      if (now - lastRxAt > SOCKET_STALE_RECONNECT_MS) {
+        try {
+          server.close(1012, 'upstream_stale');
+        } catch (_) {}
+        return;
+      }
 
       const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status,default_amps', {
         headers: {
@@ -258,11 +268,22 @@ async function handleWebSocket(request) {
       const devData = await devRes.json();
       const dev = devData && devData[0];
 
-      // Request fresh telemetry when vehicle is connected
-      if (dev && (dev.vehicle_connected || (dev.charging_status && dev.charging_status !== 'idle' && dev.charging_status !== 'unknown'))) {
+      const shouldRequestStatus = now - lastStatusRequestAt >= STATUS_REQUEST_INTERVAL_MS;
+      const chargerShouldProvideMeter = dev && (dev.vehicle_connected || (dev.charging_status && dev.charging_status !== 'idle' && dev.charging_status !== 'unknown'));
+      const shouldRequestMeter = chargerShouldProvideMeter
+        && (now - lastMeterRequestAt >= METER_REQUEST_INTERVAL_MS || now - lastMeterRxAt >= METER_REQUEST_INTERVAL_MS);
+
+      if (shouldRequestStatus) {
         try {
-          server.send(JSON.stringify([2, 'tv-' + Date.now(), 'TriggerMessage', { requestedMessage: 'MeterValues' }]));
-          server.send(JSON.stringify([2, 'ts-' + Date.now(), 'TriggerMessage', { requestedMessage: 'StatusNotification' }]));
+          server.send(JSON.stringify([2, 'ts-' + now, 'TriggerMessage', { requestedMessage: 'StatusNotification' }]));
+          lastStatusRequestAt = now;
+        } catch (_) {}
+      }
+
+      if (shouldRequestMeter) {
+        try {
+          server.send(JSON.stringify([2, 'tv-' + now, 'TriggerMessage', { requestedMessage: 'MeterValues' }]));
+          lastMeterRequestAt = now;
         } catch (_) {}
       }
 
@@ -299,12 +320,48 @@ async function handleWebSocket(request) {
     }
   }, 5000);
 
-  server.addEventListener('close', () => {
+  const handleDisconnect = async (reason = 'socket_closed') => {
+    if (isDisconnected) return;
+    isDisconnected = true;
     clearInterval(commandPollInterval);
+
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': 'Bearer ' + SERVICE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ charging_status: 'unknown', updated_at: new Date().toISOString() }),
+      });
+    } catch (_) {}
+
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending', {
+        method: 'PATCH',
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': 'Bearer ' + SERVICE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          result: { reason },
+        }),
+      });
+    } catch (_) {}
+  };
+
+  server.addEventListener('close', () => {
+    handleDisconnect('socket_closed');
   });
 
   server.addEventListener('error', () => {
-    clearInterval(commandPollInterval);
+    handleDisconnect('socket_error');
   });
 
   const responseHeaders = selectedProtocol ? { 'Sec-WebSocket-Protocol': selectedProtocol } : undefined;
@@ -491,7 +548,7 @@ async function handleOcppCall(server, deviceId, apiKey, uniqueId, action, payloa
       server.send(JSON.stringify([3, uniqueId, {
         status: 'Accepted',
         currentTime: new Date().toISOString(),
-        interval: 60,
+        interval: 30,
       }]));
       break;
 
