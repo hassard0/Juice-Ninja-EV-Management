@@ -249,7 +249,7 @@ async function handleWebSocket(request) {
         body: JSON.stringify({ updated_at: new Date().toISOString() }),
       });
 
-      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id', {
+      const devRes = await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId + '&select=active_transaction_id,vehicle_connected,charging_status', {
         headers: {
           'apikey': SERVICE_KEY,
           'Authorization': 'Bearer ' + SERVICE_KEY,
@@ -257,6 +257,14 @@ async function handleWebSocket(request) {
       });
       const devData = await devRes.json();
       const dev = devData && devData[0];
+
+      // Request fresh telemetry when vehicle is connected
+      if (dev && (dev.vehicle_connected || (dev.charging_status && dev.charging_status !== 'idle' && dev.charging_status !== 'unknown'))) {
+        try {
+          server.send(JSON.stringify([2, 'tv-' + Date.now(), 'TriggerMessage', { requestedMessage: 'MeterValues' }]));
+          server.send(JSON.stringify([2, 'ts-' + Date.now(), 'TriggerMessage', { requestedMessage: 'StatusNotification' }]));
+        } catch (_) {}
+      }
 
       // Send one command at a time
       const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at&limit=1', {
