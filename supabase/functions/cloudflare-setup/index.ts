@@ -345,6 +345,7 @@ async function handleWebSocket(request) {
     if (isDisconnected) return;
     isDisconnected = true;
     clearInterval(commandPollInterval);
+    clearInterval(pingInterval);
 
     try {
       await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
