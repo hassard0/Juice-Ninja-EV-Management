@@ -28,6 +28,7 @@ export default function DeviceDetail() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { timeFormat } = useUserSettings();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [newStartTime, setNewStartTime] = useState("23:00");
