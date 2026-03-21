@@ -17,7 +17,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Toolti
 import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
-
+import { isDeviceOnline } from "@/lib/device-status";
 
 type Device = Database["public"]["Tables"]["devices"]["Row"];
 type Schedule = Database["public"]["Tables"]["schedules"]["Row"];
@@ -269,12 +269,11 @@ export default function DeviceDetail() {
   const latestTeleAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
   // Control gating should follow fresh measured current + very fresh device heartbeat
   const CONTROL_TELEMETRY_FRESH_MS = 3 * 60 * 1000;
-  const COMMAND_CHANNEL_FRESH_MS = 45 * 1000;
   const hasFreshTelemetry = latestTeleAge < CONTROL_TELEMETRY_FRESH_MS;
   const hasLiveCurrent = hasFreshTelemetry && currentAmps > 1;
   const isCharging = hasLiveCurrent;
   const displayCharging = hasLiveCurrent;
-  const isOnline = Date.now() - new Date(device.updated_at).getTime() < COMMAND_CHANNEL_FRESH_MS;
+  const isOnline = isDeviceOnline(device);
 
   // Can go back up to 365 days
   const canGoBack = chartDayOffset > -365;
