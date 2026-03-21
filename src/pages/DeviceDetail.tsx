@@ -168,27 +168,37 @@ export default function DeviceDetail() {
     return Math.max(0, whValues[whValues.length - 1] - baseline);
   }, [rawTelemetry]);
 
-  // Real-time energy extrapolation: if the charger is still drawing power,
-  // estimate energy accumulated since last telemetry reading
+  // Real-time energy extrapolation (short window only):
+  // smooth UI between telemetry packets, but never fake long stale updates.
   const [extrapolatedWh, setExtrapolatedWh] = useState(0);
   useEffect(() => {
     if (!latest || !device) { setExtrapolatedWh(0); return; }
-    const chargingStatus = (device as any)?.charging_status;
-    const isActivelyCharging = (latest.amps != null && latest.amps > 1) ||
-      chargingStatus === 'charging';
-    if (!isActivelyCharging) { setExtrapolatedWh(0); return; }
 
     const lastTime = new Date(latest.recorded_at).getTime();
+    const freshWindowMs = 45_000; // stop extrapolating if telemetry is older than 45s
+    const chargingStatus = (device as any)?.charging_status;
+    const isActivelyCharging = (latest.amps != null && latest.amps > 1) || chargingStatus === 'charging';
+    const isFresh = Date.now() - lastTime <= freshWindowMs;
+
+    if (!isActivelyCharging || !isFresh) {
+      setExtrapolatedWh(0);
+      return;
+    }
+
     const watts = (latest.amps || 0) * (latest.voltage || 240);
 
-    const interval = setInterval(() => {
-      const elapsed = (Date.now() - lastTime) / 3600000; // hours
+    const tick = () => {
+      const ageMs = Date.now() - lastTime;
+      if (ageMs > freshWindowMs) {
+        setExtrapolatedWh(0);
+        return;
+      }
+      const elapsed = ageMs / 3600000; // hours
       setExtrapolatedWh(watts * elapsed);
-    }, 1000);
+    };
 
-    // Compute immediately
-    const elapsed = (Date.now() - lastTime) / 3600000;
-    setExtrapolatedWh(watts * elapsed);
+    const interval = setInterval(tick, 1000);
+    tick();
 
     return () => clearInterval(interval);
   }, [latest, device]);
