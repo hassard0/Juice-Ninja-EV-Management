@@ -269,7 +269,7 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
   const ocppUrl = `wss://ocpp.juice.ninja/${device.id}`;
 
   const guide = getFirmwareGuide(device.firmware_type, webhookUrl, commandsUrl, device.id, device.api_key || "");
-  const isOcppFirmware = ["ocpp", "wallbox", "grizzle"].includes(device.firmware_type || "");
+  const isOcppFirmware = ["ocpp", "wallbox", "grizzl-e"].includes(device.firmware_type || "");
 
   const handleCopy = async (text: string, field: string) => {
     await navigator.clipboard.writeText(text);
