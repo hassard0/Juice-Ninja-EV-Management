@@ -43,9 +43,8 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
   const [generatedKey, setGeneratedKey] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const webhookUrl = `https://${projectId}.supabase.co/functions/v1/telemetry-webhook`;
-  const commandsUrl = `https://${projectId}.supabase.co/functions/v1/device-commands`;
+  const webhookUrl = `https://api.juice.ninja/functions/v1/telemetry-webhook`;
+  const commandsUrl = `https://api.juice.ninja/functions/v1/device-commands`;
 
   const resetForm = useCallback(() => {
     setStep("details");

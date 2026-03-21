@@ -99,7 +99,7 @@ function getFirmwareGuide(firmware: string | null, webhookUrl: string, commandsU
               "Access your charger's configuration interface (varies by manufacturer — check your manual for the admin panel URL or app).",
               "Find the OCPP settings section (sometimes labelled Network, Cloud, Backend, or Central System).",
               "Set the OCPP version/protocol to 1.6J (JSON over WebSocket).",
-              `Set the Central System URL (CSMS URL / WebSocket URL) to:\n  ws://${webhookUrl.replace(/^https?:\/\//, "")}/${deviceId}`,
+              `Set the Central System URL (CSMS URL / WebSocket URL) to:\n  wss://ocpp.juice.ninja/${deviceId}`,
               "Note: this is a single WebSocket endpoint — the charger handles telemetry reporting AND receives commands over the same connection.",
               `Set the Charge Point ID (Station Identity) to:\n  ${deviceId}`,
               `If your charger supports a CSMS password or authentication key, set it to:\n  ${truncKey}`,
@@ -264,9 +264,9 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
   const [regenerating, setRegenerating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const webhookUrl = `https://${projectId}.supabase.co/functions/v1/telemetry-webhook`;
-  const commandsUrl = `https://${projectId}.supabase.co/functions/v1/device-commands`;
+  const webhookUrl = `https://api.juice.ninja/functions/v1/telemetry-webhook`;
+  const commandsUrl = `https://api.juice.ninja/functions/v1/device-commands`;
+  const ocppUrl = `wss://ocpp.juice.ninja/${device.id}`;
 
   const guide = getFirmwareGuide(device.firmware_type, webhookUrl, commandsUrl, device.id, device.api_key || "");
   const isOcppFirmware = ["ocpp", "wallbox", "grizzle"].includes(device.firmware_type || "");
@@ -387,9 +387,9 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
                   <p className="text-xs text-muted-foreground">Telemetry and control share the same WebSocket connection.</p>
                   <div className="flex gap-2">
                     <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">
-                      {`ws://${webhookUrl.replace(/^https?:\/\//, "")}/${device.id}`}
+                      {ocppUrl}
                     </code>
-                    <CopyButton text={`ws://${webhookUrl.replace(/^https?:\/\//, "")}/${device.id}`} field="ocpp-ws" />
+                    <CopyButton text={ocppUrl} field="ocpp-ws" />
                   </div>
                 </div>
               ) : (
