@@ -98,7 +98,7 @@ export default function Admin() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
@@ -153,7 +153,7 @@ export default function Admin() {
           <CardHeader>
             <CardTitle className="text-base">Registered Users</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -189,7 +189,7 @@ export default function Admin() {
           <CardHeader>
             <CardTitle className="text-base">All Chargers</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -236,7 +236,7 @@ export default function Admin() {
           <CardHeader>
             <CardTitle className="text-base">Recent Sessions</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

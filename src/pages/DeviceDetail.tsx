@@ -193,29 +193,31 @@ export default function DeviceDetail() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8 space-y-8">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Header with gear icon */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/dashboard"><ArrowLeft className="h-5 w-5" /></Link>
-          </Button>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{device.name}</h1>
-              <ChargerSettingsDialog device={device} onUpdated={() => queryClient.invalidateQueries({ queryKey: ["device", id] })} />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <Button variant="ghost" size="icon" asChild className="shrink-0">
+              <Link to="/dashboard"><ArrowLeft className="h-5 w-5" /></Link>
+            </Button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold truncate">{device.name}</h1>
+                <ChargerSettingsDialog device={device} onUpdated={() => queryClient.invalidateQueries({ queryKey: ["device", id] })} />
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                {device.firmware_type || "Unknown firmware"}{device.url ? ` · ${device.url}` : ""}
+                {(device as any).timezone ? ` · ${(device as any).timezone.replace(/_/g, " ")}` : ""}
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {device.firmware_type || "Unknown firmware"}{device.url ? ` · ${device.url}` : ""}
-              {(device as any).timezone ? ` · ${(device as any).timezone.replace(/_/g, " ")}` : ""}
-            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-11 sm:ml-0">
             {vehicleConnected && (
-              <Badge className="bg-primary/10 text-primary">
-                <Car className="h-3 w-3 mr-1" /> Vehicle connected
+              <Badge className="bg-primary/10 text-primary text-xs">
+                <Car className="h-3 w-3 mr-1" /> Connected
               </Badge>
             )}
-            <Badge className={isOnline ? "bg-primary text-primary-foreground" : "bg-destructive/15 text-destructive"}>
+            <Badge className={`text-xs ${isOnline ? "bg-primary text-primary-foreground" : "bg-destructive/15 text-destructive"}`}>
               {isOnline ? <><Wifi className="h-3 w-3 mr-1" /> Online</> : <><WifiOff className="h-3 w-3 mr-1" /> Offline</>}
             </Badge>
           </div>
@@ -245,7 +247,7 @@ export default function DeviceDetail() {
         </div>
 
         {/* Quick controls */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button
             className="active:scale-[0.97] transition-transform"
             disabled={!isOnline || !vehicleConnected || isCharging}
@@ -276,23 +278,23 @@ export default function DeviceDetail() {
 
         {/* Telemetry charts with date navigation */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Telemetry</h2>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoBack} onClick={() => setChartDayOffset((o) => o - 1)}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-medium tabular-nums min-w-[100px] text-center">{chartDateLabel}</span>
-              <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoForward} onClick={() => setChartDayOffset((o) => o + 1)}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              {chartDayOffset !== 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setChartDayOffset(0)} className="text-xs">
-                  Today
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">Telemetry</h2>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoBack} onClick={() => setChartDayOffset((o) => o - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
-              )}
+                <span className="text-sm font-medium tabular-nums min-w-[100px] text-center">{chartDateLabel}</span>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={!canGoForward} onClick={() => setChartDayOffset((o) => o + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                {chartDayOffset !== 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setChartDayOffset(0)} className="text-xs">
+                    Today
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
 
           {telemetryByHour.length > 0 ? (
             <div className="grid lg:grid-cols-2 gap-6">
@@ -382,7 +384,7 @@ export default function DeviceDetail() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Days</Label>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                   {DAYS.map((day, i) => {
                     const dayNum = i + 1;
                     const selected = newDays.includes(dayNum);
