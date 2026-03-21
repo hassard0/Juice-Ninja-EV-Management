@@ -199,10 +199,18 @@ export default function DeviceDetail() {
 
         {/* Quick controls */}
         <div className="flex gap-3">
-          <Button className="active:scale-[0.97] transition-transform" onClick={() => toast.success("Charging started (demo)")}>
+          <Button className="active:scale-[0.97] transition-transform" onClick={async () => {
+            const { error } = await supabase.from("device_commands").insert({ device_id: device!.id, command: "start" });
+            if (error) toast.error(error.message);
+            else toast.success("Start command queued — charger will pick it up on next poll");
+          }}>
             <Play className="h-4 w-4 mr-1" /> Start charging
           </Button>
-          <Button variant="destructive" className="active:scale-[0.97] transition-transform" onClick={() => toast.success("Charging stopped (demo)")}>
+          <Button variant="destructive" className="active:scale-[0.97] transition-transform" onClick={async () => {
+            const { error } = await supabase.from("device_commands").insert({ device_id: device!.id, command: "stop" });
+            if (error) toast.error(error.message);
+            else toast.success("Stop command queued — charger will pick it up on next poll");
+          }}>
             <Square className="h-4 w-4 mr-1" /> Stop charging
           </Button>
         </div>

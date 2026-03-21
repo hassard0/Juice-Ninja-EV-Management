@@ -108,12 +108,17 @@ export default function Dashboard() {
   const totalKwhToday = devices.reduce((sum, d) => sum + mockTelemetry(d).session_kwh, 0);
   const totalCostToday = totalKwhToday * defaultRate;
 
-  const handleStartStop = (device: Device) => {
+  const handleStartStop = async (device: Device) => {
     const status = statusForDevice(device);
-    if (status === "charging") {
-      toast.success(`Stopped charging on ${device.name}`);
+    const command = status === "charging" ? "stop" : "start";
+    const { error } = await supabase.from("device_commands").insert({
+      device_id: device.id,
+      command,
+    });
+    if (error) {
+      toast.error(error.message);
     } else {
-      toast.success(`Started charging on ${device.name}`);
+      toast.success(`${command === "start" ? "Start" : "Stop"} command queued for ${device.name}`);
     }
   };
 
