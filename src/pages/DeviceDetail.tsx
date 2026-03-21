@@ -117,19 +117,49 @@ export default function DeviceDetail() {
       if (t.wh != null) hourMap[key].wh.push(t.wh);
       if (t.temperature != null) hourMap[key].temp.push(t.temperature);
     }
-    return Object.entries(hourMap)
+    const sorted = Object.entries(hourMap)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([hour, vals]) => ({
-        hour,
-        amps: vals.amps.length ? vals.amps.reduce((a, b) => a + b, 0) / vals.amps.length : 0,
-        voltage: vals.voltage.length ? vals.voltage.reduce((a, b) => a + b, 0) / vals.voltage.length : 0,
-        kwh: vals.wh.length ? Math.max(...vals.wh) / 1000 : 0,
-        temp: vals.temp.length ? vals.temp.reduce((a, b) => a + b, 0) / vals.temp.length : 0,
-      }));
+      .map(([hour, vals]) => {
+        const maxWh = vals.wh.length ? Math.max(...vals.wh) : null;
+        const minWh = vals.wh.length ? Math.min(...vals.wh) : null;
+        return {
+          hour,
+          amps: vals.amps.length ? vals.amps.reduce((a, b) => a + b, 0) / vals.amps.length : 0,
+          voltage: vals.voltage.length ? vals.voltage.reduce((a, b) => a + b, 0) / vals.voltage.length : 0,
+          _maxWh: maxWh,
+          _minWh: minWh,
+          kwh: 0, // will be computed below as delta
+          temp: vals.temp.length ? vals.temp.reduce((a, b) => a + b, 0) / vals.temp.length : 0,
+        };
+      });
+
+    // Compute per-hour energy as delta between this hour's max and previous hour's max (cumulative meter)
+    for (let i = 0; i < sorted.length; i++) {
+      const cur = sorted[i];
+      if (cur._maxWh == null) continue;
+      if (i === 0) {
+        // First hour: use intra-hour delta (max - min within that hour)
+        cur.kwh = cur._minWh != null ? (cur._maxWh - cur._minWh) / 1000 : 0;
+      } else {
+        const prev = sorted[i - 1];
+        if (prev._maxWh != null) {
+          cur.kwh = Math.max(0, (cur._maxWh - prev._maxWh) / 1000);
+        } else {
+          cur.kwh = cur._minWh != null ? (cur._maxWh - cur._minWh) / 1000 : 0;
+        }
+      }
+    }
+
+    return sorted;
   }, [rawTelemetry]);
 
-  // Latest telemetry values (always from today's data or latest available)
+  // Latest telemetry values and session energy (delta between first and last wh reading of the day)
   const latest = rawTelemetry.length > 0 && chartDayOffset === 0 ? rawTelemetry[rawTelemetry.length - 1] : null;
+  const sessionEnergyWh = useMemo(() => {
+    const whValues = rawTelemetry.filter((t) => t.wh != null).map((t) => t.wh!);
+    if (whValues.length < 2) return 0;
+    return Math.max(0, whValues[whValues.length - 1] - whValues[0]);
+  }, [rawTelemetry]);
 
   const vehicleConnected = (device as any)?.vehicle_connected ?? false;
 
@@ -173,7 +203,6 @@ export default function DeviceDetail() {
   const currentAmps = latest?.amps ?? 0;
   const currentVoltage = latest?.voltage ?? 0;
   const currentTemp = latest?.temperature ?? null;
-  const totalWh = latest?.wh ?? 0;
   const latestTeleAge = latest ? Date.now() - new Date(latest.recorded_at).getTime() : Infinity;
   const isCharging = currentAmps > 1 && latestTeleAge < TELEMETRY_FRESH_MS;
   const isOnline = isDeviceOnline(device);
@@ -230,7 +259,7 @@ export default function DeviceDetail() {
             { label: "Current", value: `${currentAmps.toFixed(1)} A`, icon: Activity },
             { label: "Voltage", value: `${currentVoltage.toFixed(0)} V`, icon: Zap },
             { label: "Temperature", value: currentTemp != null ? `${currentTemp.toFixed(0)}°C` : "—", icon: Thermometer },
-            { label: "Session energy", value: `${(totalWh / 1000).toFixed(1)} kWh`, icon: Zap },
+            { label: "Session energy", value: `${(sessionEnergyWh / 1000).toFixed(1)} kWh`, icon: Zap },
           ].map((s) => (
             <Card key={s.label}>
               <CardContent className="p-4">

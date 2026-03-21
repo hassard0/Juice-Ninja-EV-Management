@@ -78,7 +78,7 @@ export default function Dashboard() {
   });
 
   // Fetch weekly telemetry for energy chart
-  const { data: weeklyTelemetry = [] } = useQuery({
+  const { data: weeklyEnergyData = [] } = useQuery({
     queryKey: ["telemetry_weekly", devices.map((d) => d.id)],
     queryFn: async () => {
       if (!user || devices.length === 0) return [];
@@ -92,13 +92,23 @@ export default function Dashboard() {
         .gte("recorded_at", sevenDaysAgo.toISOString())
         .order("recorded_at");
       if (!data || data.length === 0) return [];
-      const dayMap: Record<string, number> = {};
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      data.forEach((row) => {
+      // Group by calendar day, compute delta (max - min) per day
+      const dayReadings: Record<string, number[]> = {};
+      data.forEach((row: any) => {
+        if (row.wh == null) return;
         const d = new Date(row.recorded_at);
-        const key = dayNames[d.getDay()];
-        dayMap[key] = (dayMap[key] || 0) + (row.wh || 0) / 1000;
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        if (!dayReadings[key]) dayReadings[key] = [];
+        dayReadings[key].push(row.wh);
       });
+      const dayMap: Record<string, number> = {};
+      for (const [key, values] of Object.entries(dayReadings)) {
+        const [y, m, dd] = key.split("-").map(Number);
+        const dayName = dayNames[new Date(y, m, dd).getDay()];
+        const delta = Math.max(0, Math.max(...values) - Math.min(...values)) / 1000;
+        dayMap[dayName] = (dayMap[dayName] || 0) + delta;
+      }
       return Object.entries(dayMap).map(([day, kwh]) => ({ day, kwh: parseFloat(kwh.toFixed(1)) }));
     },
     enabled: !!user && devices.length > 0,
@@ -128,14 +138,12 @@ export default function Dashboard() {
     const tele = telemetryByDevice[device.id];
     const amps = tele?.amps ?? 0;
     const voltage = tele?.voltage ?? 0;
-    const wh = tele?.wh ?? 0;
     const temperature = tele?.temperature ?? null;
     const teleAge = tele ? Date.now() - new Date(tele.recorded_at).getTime() : Infinity;
     return {
       amps: teleAge < TELEMETRY_FRESH_MS ? amps : 0,
       voltage: teleAge < TELEMETRY_FRESH_MS ? voltage : 0,
       power_kw: teleAge < TELEMETRY_FRESH_MS ? (amps * voltage) / 1000 : 0,
-      session_kwh: wh / 1000,
       temperature: teleAge < TELEMETRY_FRESH_MS ? temperature : null,
     };
   };
@@ -143,8 +151,24 @@ export default function Dashboard() {
   const sym = userSettings?.currency_symbol || "£";
   const defaultRate = tariffs.find((t) => t.is_default)?.cost_per_kwh || tariffs[0]?.cost_per_kwh || 0.25;
 
+  // Compute daily energy per device as delta between first and last wh reading
+  const dailyEnergyByDevice = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const device of devices) {
+      const readings = latestTelemetry
+        .filter((t) => t.device_id === device.id && t.wh != null)
+        .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
+      if (readings.length >= 2) {
+        map[device.id] = Math.max(0, (readings[readings.length - 1].wh! - readings[0].wh!)) / 1000;
+      } else {
+        map[device.id] = 0;
+      }
+    }
+    return map;
+  }, [devices, latestTelemetry]);
+
   const activeCount = devices.filter((d) => getDeviceStatus(d) === "charging").length;
-  const totalKwhToday = devices.reduce((sum, d) => sum + getDeviceTelemetry(d).session_kwh, 0);
+  const totalKwhToday = Object.values(dailyEnergyByDevice).reduce((sum, kwh) => sum + kwh, 0);
   const totalCostToday = totalKwhToday * defaultRate;
 
   const handleStartStop = async (device: Device) => {
@@ -161,7 +185,7 @@ export default function Dashboard() {
     }
   };
 
-  const energyChartData = weeklyTelemetry;
+  const energyChartData = weeklyEnergyData;
 
   return (
     <div className="min-h-screen bg-background">
@@ -284,7 +308,7 @@ export default function Dashboard() {
                           </div>
                           <div className="flex items-center gap-1.5 text-muted-foreground">
                             <BatteryCharging className="h-3.5 w-3.5" />
-                            <span className="tabular-nums">{tele.session_kwh.toFixed(1)} kWh</span>
+                            <span className="tabular-nums">{(dailyEnergyByDevice[device.id] || 0).toFixed(1)} kWh</span>
                           </div>
                         </div>
                         <Button
