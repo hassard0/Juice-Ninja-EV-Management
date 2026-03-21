@@ -242,7 +242,7 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <KeyRound className="h-3.5 w-3.5" /> API Key
+                    <KeyRound className="h-3.5 w-3.5" /> API Key / CSMS Password
                   </Label>
                   <div className="flex gap-2">
                     <code className="flex-1 rounded-md border bg-background px-3 py-2 text-sm font-mono break-all select-all">
@@ -261,7 +261,7 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Wifi className="h-3.5 w-3.5" /> Device ID
+                    <Wifi className="h-3.5 w-3.5" /> Device ID / Charge Point ID
                   </Label>
                   <div className="flex gap-2">
                     <code className="flex-1 rounded-md border bg-background px-3 py-2 text-sm font-mono break-all select-all">
@@ -278,47 +278,83 @@ export default function AddChargerDialog({ onAdded }: AddChargerDialogProps) {
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Telemetry endpoint</Label>
-                  <div className="flex gap-2">
-                    <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">
-                      {webhookUrl}
-                    </code>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => handleCopy(webhookUrl, "webhook")}
-                      className="shrink-0"
-                    >
-                      {copiedField === "webhook" ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-                    </Button>
+                {isOcppFirmware ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">OCPP WebSocket URL (single endpoint)</Label>
+                    <div className="flex gap-2">
+                      <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">
+                        {ocppUrl}
+                      </code>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => handleCopy(ocppUrl, "ocpp")}
+                        className="shrink-0"
+                      >
+                        {copiedField === "ocpp" ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">This single WebSocket handles both telemetry and remote commands.</p>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Telemetry endpoint</Label>
+                      <div className="flex gap-2">
+                        <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">
+                          {webhookUrl}
+                        </code>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => handleCopy(webhookUrl, "webhook")}
+                          className="shrink-0"
+                        >
+                          {copiedField === "webhook" ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Commands endpoint</Label>
-                  <div className="flex gap-2">
-                    <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">
-                      {commandsUrl}
-                    </code>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => handleCopy(commandsUrl, "commands")}
-                      className="shrink-0"
-                    >
-                      {copiedField === "commands" ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Commands endpoint</Label>
+                      <div className="flex gap-2">
+                        <code className="flex-1 rounded-md border bg-background px-3 py-2 text-xs font-mono break-all select-all">
+                          {commandsUrl}
+                        </code>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => handleCopy(commandsUrl, "commands")}
+                          className="shrink-0"
+                        >
+                          {copiedField === "commands" ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
                 <p className="text-sm font-medium">Charger configuration</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  In your charger's firmware settings, configure it to <strong>POST</strong> telemetry data to the telemetry endpoint above with these headers:
-                </p>
-                <code className="block rounded-md border bg-background p-3 text-xs font-mono whitespace-pre text-muted-foreground">
+                {isOcppFirmware ? (
+                  <>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      In your charger's OCPP settings, set this exactly:
+                    </p>
+                    <code className="block rounded-md border bg-background p-3 text-xs font-mono whitespace-pre text-muted-foreground break-all">
+{`Central System URL: ${ocppUrl}
+Charge Point ID: ${createdDeviceId}
+CSMS Password (if supported): ${generatedKey}
+WebSocket subprotocol: ocpp1.6`}
+                    </code>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      In your charger's firmware settings, configure it to <strong>POST</strong> telemetry data to the telemetry endpoint above with these headers:
+                    </p>
+                    <code className="block rounded-md border bg-background p-3 text-xs font-mono whitespace-pre text-muted-foreground">
 {`x-device-id: ${createdDeviceId.slice(0, 8)}...
 x-api-key: ${generatedKey.slice(0, 12)}...
 Content-Type: application/json
@@ -329,10 +365,12 @@ Content-Type: application/json
   "wh": 1450,
   "temperature": 32.5
 }`}
-                </code>
-                <p className="text-xs text-muted-foreground">
-                  Pending commands are returned in the response body, or poll the commands endpoint via <strong>GET</strong>.
-                </p>
+                    </code>
+                    <p className="text-xs text-muted-foreground">
+                      Pending commands are returned in the response body, or poll the commands endpoint via <strong>GET</strong>.
+                    </p>
+                  </>
+                )}
               </div>
 
               <Button className="w-full active:scale-[0.97] transition-transform" onClick={() => handleClose(false)}>
