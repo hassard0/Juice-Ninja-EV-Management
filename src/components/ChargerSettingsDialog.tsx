@@ -570,7 +570,7 @@ Content-Type: application/json
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {AMP_OPTIONS.filter((a) => a <= ((device as any).max_amps || 40)).map((a) => (
+                      {AMP_OPTIONS.filter((a) => a <= maxAmps).map((a) => (
                         <SelectItem key={a} value={String(a)}>{a}A</SelectItem>
                       ))}
                     </SelectContent>
