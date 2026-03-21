@@ -183,9 +183,31 @@ async function handleWebSocket(request) {
     }
   });
 
-  // Poll for pending commands every 10 seconds
+  // Send WebSocket ping every 30s to prevent Cloudflare from dropping the connection
+  const pingInterval = setInterval(() => {
+    try {
+      server.send(JSON.stringify([2, 'ping-' + Date.now(), 'TriggerMessage', { requestedMessage: 'Heartbeat' }]));
+    } catch (e) {
+      // Socket already closed
+      clearInterval(pingInterval);
+    }
+  }, 30000);
+
+  // Poll for pending commands every 10 seconds and keep device alive
   const commandPollInterval = setInterval(async () => {
     try {
+      // Update device timestamp to keep it "online" even between charger heartbeats
+      await fetch(SUPABASE_URL + '/rest/v1/devices?id=eq.' + resolvedDeviceId, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': 'Bearer ' + SERVICE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ updated_at: new Date().toISOString() }),
+      });
+
       const cmdRes = await fetch(SUPABASE_URL + '/rest/v1/device_commands?device_id=eq.' + resolvedDeviceId + '&status=eq.pending&order=created_at', {
         headers: {
           'apikey': SERVICE_KEY,
@@ -217,6 +239,12 @@ async function handleWebSocket(request) {
 
   server.addEventListener('close', () => {
     clearInterval(commandPollInterval);
+    clearInterval(pingInterval);
+  });
+
+  server.addEventListener('error', () => {
+    clearInterval(commandPollInterval);
+    clearInterval(pingInterval);
   });
 
   const responseHeaders = selectedProtocol ? { 'Sec-WebSocket-Protocol': selectedProtocol } : undefined;
