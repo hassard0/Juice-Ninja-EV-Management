@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, Save, Loader2, Trash2, Copy, Check, KeyRound, Wifi, RefreshCw, AlertTriangle } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Settings, Save, Loader2, Trash2, Copy, Check, KeyRound, Wifi, RefreshCw, AlertTriangle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import type { Database } from "@/integrations/supabase/types";
@@ -38,6 +39,207 @@ const FIRMWARE_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
+// Firmware-specific setup guides
+function getFirmwareGuide(firmware: string | null, webhookUrl: string, commandsUrl: string, deviceId: string, apiKey: string) {
+  const truncId = deviceId.slice(0, 8) + "...";
+  const truncKey = apiKey.slice(0, 12) + "...";
+
+  switch (firmware) {
+    case "openevse":
+      return {
+        title: "OpenEVSE WiFi Module",
+        description: "OpenEVSE uses MQTT or HTTP POST for telemetry. You can configure it via the charger's built-in web UI.",
+        steps: [
+          {
+            where: "WiFi Web UI → Services → HTTP",
+            instructions: [
+              "Connect to your OpenEVSE WiFi module's web interface (usually http://openevse.local or the IP address shown on the charger's LCD).",
+              "Navigate to Services in the left menu.",
+              "Under HTTP, enable the HTTP service.",
+              `Set the URL to: ${webhookUrl}`,
+              `Add custom headers:\n  x-device-id: ${deviceId}\n  x-api-key: ${apiKey}`,
+              "Set the update interval (recommended: 30 seconds).",
+              "Click Save. The module will begin POSTing status data to Juice Ninja.",
+            ],
+          },
+          {
+            where: "WiFi Web UI → Services → MQTT (alternative)",
+            instructions: [
+              "If you prefer MQTT, you can configure an MQTT-to-HTTP bridge on your network.",
+              "Navigate to Services → MQTT in the OpenEVSE web UI.",
+              "Enter your MQTT broker details (host, port, username, password).",
+              "Set a topic prefix (e.g. openevse/telemetry).",
+              "Then configure a bridge service to forward MQTT messages to the Juice Ninja webhook.",
+            ],
+          },
+        ],
+        docsUrl: "https://openevse.stoplight.io/docs/openevse-wifi-v4",
+      };
+
+    case "ocpp":
+      return {
+        title: "OCPP 1.6J Central System",
+        description: "OCPP chargers connect to a Central System Management Server (CSMS) via WebSocket. Juice Ninja acts as your CSMS.",
+        steps: [
+          {
+            where: "Charger configuration panel → OCPP Settings",
+            instructions: [
+              "Access your charger's configuration interface (this varies by manufacturer — check your charger's manual for the admin panel URL or app).",
+              "Find the OCPP settings section (sometimes under Network, Cloud, or Backend).",
+              "Set the OCPP version to 1.6 or 1.6J.",
+              `Set the Central System URL (CSMS URL) to:\n  ${webhookUrl}`,
+              `Set the Charge Point ID (Station ID) to:\n  ${deviceId}`,
+              `If your charger supports an authentication key/password, set it to your API key:\n  ${truncKey}`,
+              "Set the Heartbeat Interval to 60 seconds.",
+              "Enable Meter Values reporting if available (interval: 30s, measurands: Energy.Active.Import.Register, Current.Import, Voltage, Temperature).",
+              "Save and restart the charger. It should connect automatically.",
+            ],
+          },
+        ],
+        docsUrl: "https://www.openchargealliance.org/protocols/ocpp-16/",
+      };
+
+    case "wallbox":
+      return {
+        title: "Wallbox (Pulsar Plus / Commander / Copper)",
+        description: "Wallbox chargers support OCPP 1.6J. Configure the connection through the myWallbox app or portal.",
+        steps: [
+          {
+            where: "myWallbox App → Charger settings → OCPP",
+            instructions: [
+              "Open the myWallbox app (iOS/Android) or portal (my.wallbox.com).",
+              "Select your charger and go to Settings.",
+              "Scroll to OCPP and enable it.",
+              `Set the CSMS URL to:\n  ${webhookUrl}`,
+              `Set the Charge Point ID to:\n  ${deviceId}`,
+              "If your charger/plan supports OCPP password authentication, enter your API key.",
+              "Tap Save. The charger will restart and connect to Juice Ninja.",
+              "An OCPP icon should appear on the charger's app overview when connected.",
+            ],
+          },
+          {
+            where: "Wallbox portal → Advanced settings",
+            instructions: [
+              "Alternatively, log into my.wallbox.com.",
+              "Go to your charger → Configuration → OCPP.",
+              "If your OCPP provider isn't listed in the dropdown, select 'Other' and enter the URL manually.",
+              "The configuration fields are the same as in the app.",
+            ],
+          },
+        ],
+        docsUrl: "https://support.wallbox.com/na/knowledge-base/ocpp-activation-and-setup-guide/",
+      };
+
+    case "zappi":
+      return {
+        title: "myenergi Zappi",
+        description: "The Zappi uses myenergi's cloud API. Juice Ninja connects via the myenergi API — you'll need your myenergi Hub serial number and API key from the myenergi app.",
+        steps: [
+          {
+            where: "myenergi App → Settings → API access",
+            instructions: [
+              "Open the myenergi app on your phone.",
+              "Go to Settings → API access or Hub settings.",
+              "Note your Hub serial number and generate an API key if you haven't already.",
+              "You don't configure the Zappi itself to connect to Juice Ninja — instead, Juice Ninja polls the myenergi cloud API on your behalf.",
+              `Enter your myenergi Hub serial and API key into Juice Ninja's charger settings (General tab) so we can fetch your Zappi's data.`,
+            ],
+          },
+          {
+            where: "Juice Ninja setup",
+            instructions: [
+              `Your Juice Ninja Device ID is: ${deviceId}`,
+              `Your Juice Ninja API Key is: ${truncKey}`,
+              "These are used internally — you don't need to enter them into the Zappi.",
+              "Instead, ensure your myenergi Hub is online and the Zappi is connected to it.",
+            ],
+          },
+        ],
+        docsUrl: "https://myenergi.info/",
+      };
+
+    case "grizzl-e":
+      return {
+        title: "Grizzl-E Smart",
+        description: "Grizzl-E Smart chargers support OCPP 1.6J via the Grizzl-E Connect app.",
+        steps: [
+          {
+            where: "Grizzl-E Connect App → Settings → OCPP",
+            instructions: [
+              "Open the Grizzl-E Connect app.",
+              "Select your charger and navigate to Settings → OCPP.",
+              "Enable OCPP.",
+              `Set the Backend URL to:\n  ${webhookUrl}`,
+              `Set the Charge Point Identity to:\n  ${deviceId}`,
+              "Save the settings. The charger will connect to Juice Ninja on the next boot cycle.",
+            ],
+          },
+        ],
+        docsUrl: null,
+      };
+
+    case "emporia":
+      return {
+        title: "Emporia EV Charger",
+        description: "Emporia chargers are managed through the Emporia Vue app. Integration with Juice Ninja uses the Emporia cloud API.",
+        steps: [
+          {
+            where: "Emporia Vue App → Settings",
+            instructions: [
+              "Emporia chargers don't support direct OCPP configuration.",
+              "Integration works through the Emporia cloud API.",
+              "Ensure your charger is set up and online in the Emporia Vue app.",
+              "Juice Ninja will poll the Emporia API for telemetry data.",
+              "You may need to provide your Emporia account credentials in the General settings tab.",
+            ],
+          },
+        ],
+        docsUrl: null,
+      };
+
+    case "custom_http":
+      return {
+        title: "Custom HTTP Integration",
+        description: "For chargers with custom firmware or DIY setups, configure your device to POST JSON telemetry to Juice Ninja's webhook.",
+        steps: [
+          {
+            where: "Your charger's firmware / script configuration",
+            instructions: [
+              `Configure your device to send HTTP POST requests to:\n  ${webhookUrl}`,
+              `Include these headers with every request:\n  x-device-id: ${deviceId}\n  x-api-key: ${apiKey}\n  Content-Type: application/json`,
+              `Send a JSON body with any of these fields:\n  {\n    "amps": 16.2,\n    "voltage": 238,\n    "wh": 1450,\n    "temperature": 32.5\n  }`,
+              "All fields are optional — send whatever your hardware can measure.",
+              `To receive commands, poll:\n  GET ${commandsUrl}\n  with the same x-device-id and x-api-key headers.`,
+              "Pending commands are also returned in the telemetry POST response body for convenience.",
+              "Recommended polling/POST interval: every 10–30 seconds while charging, every 60 seconds when idle.",
+            ],
+          },
+        ],
+        docsUrl: null,
+      };
+
+    default:
+      return {
+        title: "Generic Charger Setup",
+        description: "Configure your charger to send telemetry data to Juice Ninja using HTTP POST requests.",
+        steps: [
+          {
+            where: "Charger configuration interface",
+            instructions: [
+              `Set the backend/webhook URL to:\n  ${webhookUrl}`,
+              `Set the device identifier to:\n  ${deviceId}`,
+              `Set the authentication key to:\n  ${apiKey}`,
+              "If your charger supports OCPP 1.6, use the OCPP configuration path instead.",
+              "If it supports HTTP webhooks, configure it to POST JSON telemetry data.",
+              "Refer to your charger's manual for the exact settings location.",
+            ],
+          },
+        ],
+        docsUrl: null,
+      };
+  }
+}
+
 export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSettingsDialogProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -53,9 +255,12 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
   const webhookUrl = `https://${projectId}.supabase.co/functions/v1/telemetry-webhook`;
   const commandsUrl = `https://${projectId}.supabase.co/functions/v1/device-commands`;
 
+  const guide = getFirmwareGuide(device.firmware_type, webhookUrl, commandsUrl, device.id, device.api_key || "");
+
   const handleCopy = async (text: string, field: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedField(field);
+    toast.success("Copied to clipboard");
     setTimeout(() => setCopiedField(null), 2000);
   };
 
@@ -124,13 +329,16 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
         <Tabs defaultValue="connection" className="mt-2">
           <TabsList className="w-full">
             <TabsTrigger value="connection" className="flex-1">Connection</TabsTrigger>
+            <TabsTrigger value="setup" className="flex-1">Setup guide</TabsTrigger>
             <TabsTrigger value="general" className="flex-1">General</TabsTrigger>
-            <TabsTrigger value="danger" className="flex-1">Danger zone</TabsTrigger>
+            <TabsTrigger value="danger" className="flex-1">Danger</TabsTrigger>
           </TabsList>
 
-          {/* Connection tab — webhook URLs, device ID, API key */}
+          {/* Connection tab — credentials */}
           <TabsContent value="connection" className="space-y-5 mt-4">
-            <p className="text-sm text-muted-foreground">Configure your charger firmware to connect to Juice Ninja using these credentials.</p>
+            <p className="text-sm text-muted-foreground">
+              These are the credentials your charger needs to connect to Juice Ninja. See the <strong>Setup guide</strong> tab for where to enter them.
+            </p>
 
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
               <div className="space-y-1.5">
@@ -175,14 +383,56 @@ export default function ChargerSettingsDialog({ device, onUpdated }: ChargerSett
                 </div>
               </div>
             </div>
+          </TabsContent>
 
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-              <p className="text-sm font-medium">Example request</p>
-              <p className="text-xs text-muted-foreground">Configure your charger to <strong>POST</strong> telemetry with these headers:</p>
-              <code className="block rounded-md border bg-background p-3 text-xs font-mono whitespace-pre text-muted-foreground">
+          {/* Setup guide tab — firmware-specific instructions */}
+          <TabsContent value="setup" className="space-y-5 mt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">{guide.title}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{guide.description}</p>
+              </div>
+              {guide.docsUrl && (
+                <a href={guide.docsUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                  <Button size="sm" variant="outline">
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> Docs
+                  </Button>
+                </a>
+              )}
+            </div>
+
+            <Accordion type="multiple" defaultValue={["step-0"]} className="space-y-2">
+              {guide.steps.map((step, idx) => (
+                <AccordionItem key={idx} value={`step-${idx}`} className="border rounded-lg px-4">
+                  <AccordionTrigger className="text-sm font-medium hover:no-underline py-3">
+                    <span className="flex items-center gap-2">
+                      <span className="flex items-center justify-center h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
+                        {idx + 1}
+                      </span>
+                      {step.where}
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4">
+                    <ol className="space-y-3 list-none">
+                      {step.instructions.map((instruction, i) => (
+                        <li key={i} className="flex gap-3 text-sm text-muted-foreground">
+                          <span className="shrink-0 text-xs font-medium text-foreground/50 tabular-nums mt-0.5 w-4 text-right">{i + 1}.</span>
+                          <span className="whitespace-pre-wrap break-all">{instruction}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+
+            {device.firmware_type === "custom_http" || device.firmware_type === "other" || !device.firmware_type ? (
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                <p className="text-sm font-medium">Example HTTP request</p>
+                <code className="block rounded-md border bg-background p-3 text-xs font-mono whitespace-pre text-muted-foreground">
 {`POST ${webhookUrl}
-x-device-id: ${device.id.slice(0, 8)}...
-x-api-key: ${(device.api_key || "").slice(0, 12)}...
+x-device-id: ${device.id}
+x-api-key: ${(device.api_key || "your-api-key")}
 Content-Type: application/json
 
 {
@@ -191,12 +441,12 @@ Content-Type: application/json
   "wh": 1450,
   "temperature": 32.5
 }`}
-              </code>
-              <p className="text-xs text-muted-foreground">Pending commands are returned in the response, or poll the commands endpoint via <strong>GET</strong>.</p>
-            </div>
+                </code>
+              </div>
+            ) : null}
           </TabsContent>
 
-          {/* General tab — name, firmware, location */}
+          {/* General tab */}
           <TabsContent value="general" className="space-y-5 mt-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
