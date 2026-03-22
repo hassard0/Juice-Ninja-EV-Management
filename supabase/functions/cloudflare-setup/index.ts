@@ -73,8 +73,8 @@ const METER_REQUEST_INTERVAL_MS = 10_000;
 const PING_INTERVAL_MS = 20_000;
 const DEVICE_TOUCH_INTERVAL_MS = 10_000;
 const STALE_PROBE_INTERVAL_MS = 20_000;
-const SOCKET_STALE_RECONNECT_MS = 90_000;
-const SOCKET_HARD_RECONNECT_MS = 4 * 60_000;
+const SOCKET_STALE_RECONNECT_MS = 3 * 60_000;
+const SOCKET_HARD_RECONNECT_MS = 12 * 60_000;
 
 addEventListener('fetch', event => {
   if (event.request.headers.get('Upgrade') === 'websocket') {
@@ -323,12 +323,18 @@ async function handleWebSocket(request) {
     try {
       const now = Date.now();
       const staleForMs = now - lastRxAt;
+      const isStaleSocket = staleForMs > SOCKET_STALE_RECONNECT_MS;
+
+      // Keep device heartbeat fresh while the socket is still considered healthy.
+      // This prevents false "offline" UI states during short quiet periods.
+      if (!isStaleSocket) {
+        await touchDevice();
+      }
 
       // Stale-recovery strategy:
       // 1) After stale threshold, probe aggressively without dropping session.
       // 2) If still stale after hard threshold, force reconnect.
       // IMPORTANT: do not return early here — keep polling command queue so Stop/Start are never blocked.
-      const isStaleSocket = staleForMs > SOCKET_STALE_RECONNECT_MS;
       if (isStaleSocket) {
         if (now - lastStaleProbeAt >= STALE_PROBE_INTERVAL_MS) {
           lastStaleProbeAt = now;
