@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Zap, BarChart3, Clock, Shield, ChevronRight, Leaf, Sun, BatteryCharging } from "lucide-react";
+import AppFooter from "@/components/AppFooter";
 import { useEffect, useRef } from "react";
 
 const useScrollReveal = () => {
@@ -180,16 +181,7 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t py-10">
-        <div className="mx-auto max-w-6xl px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-primary font-bold tracking-tight">
-            <BatteryCharging className="h-5 w-5" />
-            Juice Ninja
-          </div>
-          <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Juice Ninja. All rights reserved.</p>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }
