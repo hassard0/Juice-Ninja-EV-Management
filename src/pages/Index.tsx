@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Zap, BarChart3, Clock, Shield, ChevronRight, Leaf, Sun, BatteryCharging } from "lucide-react";
+import AppFooter from "@/components/AppFooter";
 import { useEffect, useRef } from "react";
 
 const useScrollReveal = () => {
