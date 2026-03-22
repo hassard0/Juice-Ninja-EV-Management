@@ -17,11 +17,11 @@ An open-source EV charger management platform for home and business users. Monit
 
 React + TypeScript + Vite, styled with Tailwind CSS. State management via TanStack Query with real-time subscriptions for live device status.
 
-### Backend (Lovable Cloud)
+### Backend
 
-- **Database** — PostgreSQL with row-level security for multi-tenant data isolation
-- **Auth** — Email-based authentication with protected routes
-- **Edge Functions** — Serverless functions for device command proxying and telemetry ingestion
+- **Supabase** — PostgreSQL database with row-level security for multi-tenant data isolation
+- **Supabase Auth** — Email-based authentication with protected routes
+- **Supabase Edge Functions** (Deno) — Serverless functions for device command proxying and telemetry ingestion
 
 ### Cloudflare Workers — OCPP WebSocket Bridge
 
