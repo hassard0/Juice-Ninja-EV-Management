@@ -377,6 +377,7 @@ export default function Dashboard() {
           </section>
         )}
       </main>
+      <AppFooter />
     </div>
   );
 }

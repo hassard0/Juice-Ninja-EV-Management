@@ -523,6 +523,7 @@ export default function DeviceDetail() {
           </CardContent>
         </Card>
       </main>
+      <AppFooter />
     </div>
   );
 }
