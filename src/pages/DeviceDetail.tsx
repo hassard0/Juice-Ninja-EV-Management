@@ -274,7 +274,8 @@ export default function DeviceDetail() {
   const isCharging = hasLiveCurrent;
   const displayCharging = hasLiveCurrent;
   const isOnline = isDeviceOnline(device);
-  const commandChannelReady = Date.now() - new Date(device.updated_at).getTime() < 90_000;
+  const COMMAND_CHANNEL_READY_MS = 3 * 60 * 1000;
+  const commandChannelReady = Date.now() - new Date(device.updated_at).getTime() < COMMAND_CHANNEL_READY_MS;
 
   // Can go back up to 365 days
   const canGoBack = chartDayOffset > -365;
@@ -363,7 +364,7 @@ export default function DeviceDetail() {
             disabled={!isOnline || !commandChannelReady || !isCharging}
             onClick={async () => {
               const lastSeenMs = new Date(device.updated_at).getTime();
-              if (Date.now() - lastSeenMs > 90000) {
+              if (Date.now() - lastSeenMs > COMMAND_CHANNEL_READY_MS) {
                 toast.error("Charger is disconnected — reconnect it, then try Stop again");
                 return;
               }
