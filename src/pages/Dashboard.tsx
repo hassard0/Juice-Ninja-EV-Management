@@ -11,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Toolti
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import AddChargerDialog from "@/components/AddChargerDialog";
+import AppFooter from "@/components/AppFooter";
 import type { Database } from "@/integrations/supabase/types";
 import { isDeviceOnline, TELEMETRY_FRESH_MS } from "@/lib/device-status";
 
