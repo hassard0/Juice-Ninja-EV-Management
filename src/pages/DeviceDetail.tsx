@@ -15,6 +15,7 @@ import { BatteryCharging, ArrowLeft, Zap, Activity, Thermometer, Wifi, WifiOff, 
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LineChart, Line } from "recharts";
 import ChargerSettingsDialog from "@/components/ChargerSettingsDialog";
+import AppFooter from "@/components/AppFooter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
 import { isDeviceOnline } from "@/lib/device-status";
