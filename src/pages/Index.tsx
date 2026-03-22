@@ -130,7 +130,7 @@ export default function Index() {
               { value: "2.4M", label: "kWh managed" },
               { value: "18k", label: "Charging sessions" },
               { value: "99.7%", label: "Uptime" },
-              { value: "£342k", label: "User savings" },
+              { value: "$342k", label: "User savings" },
             ].map((stat) => (
               <div key={stat.label} className="rounded-xl border bg-card p-5 shadow-sm">
                 <p className="text-2xl font-bold tabular-nums text-foreground">{stat.value}</p>
